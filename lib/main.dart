@@ -4,30 +4,27 @@ import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+import 'package:novella/core/sync/sync_manager.dart';
 import 'package:novella/features/auth/login_page.dart';
 import 'package:novella/features/settings/settings_page.dart';
 import 'package:novella/src/rust/frb_generated.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
 
-// === 新增：加载策略控制函数 ===
-// 这里的逻辑至关重要：
-// - iOS/macOS: 库被静态链接到了主程序中，所以要在当前进程(process)里找，而不是找文件。
-// - Windows/Android: 库是作为外部文件存在的，所以要打开指定的文件名。
+// === 加载 Native 库 ===
+// iOS/macOS: 静态链接 (process)
+// Windows/Android: 动态库 (open)
 ExternalLibrary _loadLibrary() {
   if (Platform.isIOS || Platform.isMacOS) {
-    // iOS 静态链接关键点：直接在当前可执行文件中查找符号
-    // iKnowHowToUseIt: 确认理解静态链接的使用方式
     return ExternalLibrary.process(iKnowHowToUseIt: true);
   } else if (Platform.isWindows) {
     return ExternalLibrary.open('novella_native.dll');
   } else {
-    // Android
     return ExternalLibrary.open('libnovella_native.so');
   }
 }
 
-// === RustLib 初始化全局状态 ===
+// === RustLib 全局状态 ===
 bool rustLibInitialized = false;
 String? rustLibInitError;
 
@@ -41,11 +38,10 @@ void main() async {
   );
 
   try {
-    // 初始化 Rust FFI 以进行 WOFF2 字体转换
+    // 初始化 Rust FFI (字体转换)
     developer.log('Initializing RustLib...', name: 'Flutter');
 
-    // === 关键修改：手动指定加载方式 ===
-    // 不再使用默认的 init()，而是传入我们要它找的那个“库”
+    // 手动加载库
     await RustLib.init(externalLibrary: _loadLibrary());
 
     rustLibInitialized = true;
@@ -107,6 +103,16 @@ class _MyAppState extends ConsumerState<MyApp> {
   Future<void> _checkDisclaimer() async {
     final prefs = await SharedPreferences.getInstance();
     final agreed = prefs.getBool('disclaimer_agreed') ?? false;
+
+    // 初始化云同步管理器
+    final syncManager = SyncManager();
+    await syncManager.init();
+
+    // 如果已连接，触发后台同步
+    if (syncManager.isConnected) {
+      syncManager.triggerSync();
+    }
+
     setState(() {
       _agreed = agreed;
       _loading = false;
@@ -183,41 +189,48 @@ class DisclaimerPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('使用须知')),
-      body: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(
-              Icons.warning_amber_rounded,
-              size: 64,
-              color: Colors.orange,
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              '免责声明',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              '本软件仅供学习交流。请勿高频操作，风险自负。',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16),
-            ),
-            const SizedBox(height: 32),
-            ElevatedButton(
-              onPressed: onAgree,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.deepPurple,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 32,
-                  vertical: 16,
-                ),
+      body: Center(
+        child: SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 600),
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.warning_amber_rounded,
+                    size: 64,
+                    color: Colors.orange,
+                  ),
+                  const SizedBox(height: 24),
+                  const Text(
+                    '免责声明',
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    '本软件仅供学习交流。请勿高频操作，风险自负。',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 16),
+                  ),
+                  const SizedBox(height: 32),
+                  ElevatedButton(
+                    onPressed: onAgree,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.deepPurple,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 32,
+                        vertical: 16,
+                      ),
+                    ),
+                    child: const Text('同意并继续'),
+                  ),
+                ],
               ),
-              child: const Text('同意并继续'),
             ),
-          ],
+          ),
         ),
       ),
     );

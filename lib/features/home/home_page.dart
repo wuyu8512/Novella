@@ -283,6 +283,19 @@ class _HomePageState extends ConsumerState<HomePage> with RouteAware {
     );
   }
 
+  /// 格式化时长（分钟 -> 小时/分钟）
+  String _formatDuration(int minutes) {
+    if (minutes < 60) {
+      return '$minutes 分钟';
+    }
+    final hours = minutes ~/ 60;
+    final mins = minutes % 60;
+    if (mins == 0) {
+      return '$hours 小时';
+    }
+    return '$hours 时 $mins 分';
+  }
+
   /// 构建统计卡片区域
   List<Widget> _buildStatsSection(BuildContext context) {
     return [
@@ -295,13 +308,16 @@ class _HomePageState extends ConsumerState<HomePage> with RouteAware {
                 child: _buildStatCard(
                   context,
                   '本月阅读',
-                  '$_monthlyMinutes',
-                  '分钟',
+                  _formatDuration(_monthlyMinutes),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: _buildStatCard(context, '本周阅读', '$_weeklyMinutes', '分钟'),
+                child: _buildStatCard(
+                  context,
+                  '本周阅读',
+                  _formatDuration(_weeklyMinutes),
+                ),
               ),
             ],
           ),
@@ -498,8 +514,7 @@ class _HomePageState extends ConsumerState<HomePage> with RouteAware {
   Widget _buildStatCard(
     BuildContext context,
     String title,
-    String value,
-    String unit,
+    String formattedDuration,
   ) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
@@ -520,25 +535,12 @@ class _HomePageState extends ConsumerState<HomePage> with RouteAware {
               ),
             ),
             const SizedBox(height: 4),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                Text(
-                  value,
-                  style: textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: colorScheme.onSurface,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  unit,
-                  style: textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
+            Text(
+              formattedDuration,
+              style: textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: colorScheme.onSurface,
+              ),
             ),
           ],
         ),

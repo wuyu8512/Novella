@@ -1,6 +1,7 @@
 import 'dart:developer' as developer;
 import 'package:logging/logging.dart';
 import 'package:novella/core/network/signalr_service.dart';
+import 'package:novella/core/sync/sync_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// 本地阅读位置数据
@@ -88,9 +89,13 @@ class ReadingProgressService {
     required int chapterId,
     required int sortNum,
     required double scrollPosition,
+    DateTime? updatedAt, // 新增：支持指定时间戳 (用于同步)
+    bool immediate = false, // 新增：是否立即同步
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final key = 'read_pos_$bookId';
+
+    final timestamp = updatedAt ?? DateTime.now();
 
     final position = ReadPosition(
       bookId: bookId,
@@ -99,16 +104,19 @@ class ReadingProgressService {
       scrollPosition: scrollPosition,
     );
 
+    // 格式: chapterId|sortNum|scrollPosition|updatedAt
     final data =
-        '${position.chapterId}|${position.sortNum}|${position.scrollPosition}';
-    // 简单字符串存储
+        '${position.chapterId}|${position.sortNum}|${position.scrollPosition}|${timestamp.toIso8601String()}';
+
     await prefs.setString(key, data);
 
     developer.log('SAVED: key=$key, data=$data', name: 'POSITION');
-    developer.log(
-      'SAVED: chapterId=$chapterId, sortNum=$sortNum, scroll=${(scrollPosition * 100).toStringAsFixed(1)}%',
-      name: 'POSITION',
-    );
+
+    // 如果是外部传入的时间戳 (说明是同步写入)，则不触发回传同步
+    // 本地写入则触发同步
+    if (updatedAt == null) {
+      SyncManager().triggerSync(immediate: immediate);
+    }
   }
 
   /// 获取本地滚动位置

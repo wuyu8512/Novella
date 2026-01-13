@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:novella/core/utils/font_manager.dart';
 import 'package:novella/main.dart' show rustLibInitialized, rustLibInitError;
 import 'package:novella/features/settings/source_code_page.dart';
+import 'package:novella/features/settings/sync_settings_section.dart';
 import 'package:novella/features/book/book_detail_page.dart'
     show BookDetailPageState;
 import 'package:novella/data/services/book_info_cache_service.dart';
@@ -633,6 +634,11 @@ class SettingsPage extends ConsumerWidget {
               ),
               onTap: () => _showClearCacheDialog(context),
             ),
+
+            const Divider(),
+
+            // 云同步区域
+            const SyncSettingsSection(),
 
             const Divider(),
 
@@ -1301,7 +1307,7 @@ class SettingsPage extends ConsumerWidget {
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                     child: Text(
-                      '在封面左下角显示书籍类型图标（录入/翻译/转载）',
+                      '在封面右下角显示书籍类型图标（录入/翻译/转载）',
                       style: textTheme.bodySmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
                       ),

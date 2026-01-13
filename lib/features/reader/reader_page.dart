@@ -134,6 +134,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         chapterId: _chapter!.id,
         sortNum: _chapter!.sortNum,
         scrollPosition: _lastScrollPercent,
+        immediate: true, // 退出阅读器时立即同步
       );
     }
     WidgetsBinding.instance.removeObserver(this);

@@ -1,4 +1,5 @@
 import 'package:logging/logging.dart';
+import 'package:novella/core/sync/sync_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// 本地书签状态枚举
@@ -66,6 +67,9 @@ class BookMarkService {
       await prefs.setInt(key, status.index);
       _logger.info('Set mark for book $bookId: ${status.displayName}');
     }
+
+    // 触发云同步（立即）
+    SyncManager().triggerSync(immediate: true);
   }
 
   /// Get the mark status for a book.
