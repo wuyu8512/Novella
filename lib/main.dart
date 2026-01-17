@@ -2,6 +2,7 @@ import 'dart:developer' as developer;
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:novella/core/sync/sync_manager.dart';
@@ -31,6 +32,20 @@ String? rustLibInitError;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 配置边到边显示（Android 小白条沉浸）
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      // 状态栏透明
+      statusBarColor: Colors.transparent,
+      // 导航栏完全透明
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarDividerColor: Colors.transparent,
+      // [关键] 关闭系统强制的对比度遮罩
+      systemNavigationBarContrastEnforced: false,
+    ),
+  );
 
   // 初始化日志缓冲服务（尽早启动以捕获所有日志）
   LogBufferService.init();
@@ -159,6 +174,16 @@ class _MyAppState extends ConsumerState<MyApp> {
           displayLarge: TextStyle(letterSpacing: -1.0),
           displayMedium: TextStyle(letterSpacing: -0.5),
         ),
+        // 防止 AppBar 覆盖系统 UI 样式
+        appBarTheme: const AppBarTheme(
+          systemOverlayStyle: SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness: Brightness.dark,
+            systemNavigationBarColor: Colors.transparent,
+            systemNavigationBarDividerColor: Colors.transparent,
+            systemNavigationBarContrastEnforced: false,
+          ),
+        ),
       ),
       darkTheme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
@@ -172,6 +197,16 @@ class _MyAppState extends ConsumerState<MyApp> {
         ),
         scaffoldBackgroundColor: settings.oledBlack ? Colors.black : null,
         useMaterial3: true,
+        // 防止 AppBar 覆盖系统 UI 样式
+        appBarTheme: const AppBarTheme(
+          systemOverlayStyle: SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness: Brightness.light,
+            systemNavigationBarColor: Colors.transparent,
+            systemNavigationBarDividerColor: Colors.transparent,
+            systemNavigationBarContrastEnforced: false,
+          ),
+        ),
       ),
       themeMode: _getThemeMode(settings.theme),
       home:
