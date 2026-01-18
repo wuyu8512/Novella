@@ -282,7 +282,7 @@ class _ThemeSelectionPageState extends ConsumerState<ThemeSelectionPage> {
                       ),
                       padding: const EdgeInsets.all(10),
                       child: Column(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -294,14 +294,6 @@ class _ThemeSelectionPageState extends ConsumerState<ThemeSelectionPage> {
                               ),
                               Switch(value: true, onChanged: (_) {}),
                             ],
-                          ),
-                          FilledButton(
-                            onPressed: () {},
-                            style: FilledButton.styleFrom(
-                              minimumSize: const Size.fromHeight(32),
-                              padding: EdgeInsets.zero,
-                            ),
-                            child: const Text('确认'),
                           ),
                         ],
                       ),
@@ -323,11 +315,6 @@ class _ThemeSelectionPageState extends ConsumerState<ThemeSelectionPage> {
                             label: const Text('选中'),
                             selected: true,
                             onSelected: (_) {},
-                            visualDensity: VisualDensity.compact,
-                          ),
-                          const SizedBox(height: 6),
-                          Chip(
-                            label: const Text('标签'),
                             visualDensity: VisualDensity.compact,
                           ),
                         ],
