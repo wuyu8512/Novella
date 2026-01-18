@@ -133,7 +133,7 @@ impl SseDecode for bool {
     }
 }
 
-fn pde_ffi_dispatcher__impl(
+fn pde_ffi_dispatcher_primary_impl(
     func_id: i32,
     port: flutter_rust_bridge::for_generated::MessagePort,
     ptr: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -209,14 +209,6 @@ impl SseEncode for bool {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         serializer.cursor.write_u8(self as _).unwrap();
     }
-}
-
-// Section: iOS symbol bundling
-/// Dummy function to force the linker to include Rust symbols on iOS.
-/// This must be called from Swift/ObjC to prevent symbol stripping.
-#[no_mangle]
-pub extern "C" fn dummy_method_to_enforce_bundling() -> i32 {
-    42
 }
 
 #[cfg(not(target_family = "wasm"))]
