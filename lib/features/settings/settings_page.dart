@@ -42,6 +42,12 @@ class AppSettings {
   final int dynamicSchemeVariant; // 动态配色方案变体索引 (0: TonalSpot, etc)
   final bool useCustomTheme; // 是否使用自定义主题模式 (Tab 状态)
   final bool notchedDisplayMode; // 异形屏适配模式（刘海屏/挖孔屏优化）
+  // 阅读背景颜色设置
+  final bool readerUseThemeBackground; // 是否使用主题色背景（默认 true）
+  final int readerBackgroundColor; // 自定义背景色 ARGB
+  final int readerTextColor; // 自定义文字色 ARGB
+  final int readerPresetIndex; // 预设方案索引 (0-4)
+  final bool readerUseCustomColor; // 是否使用自定颜色 Tab (false = 预设)
 
   static const defaultModuleOrder = ['stats', 'ranking', 'recentlyUpdated'];
   static const defaultEnabledModules = ['stats', 'ranking', 'recentlyUpdated'];
@@ -77,6 +83,12 @@ class AppSettings {
     this.dynamicSchemeVariant = 0, // 默认: TonalSpot
     this.useCustomTheme = false, // 默认使用预设 Tab
     this.notchedDisplayMode = false, // 默认关闭异形屏适配
+    // 阅读背景颜色默认值
+    this.readerUseThemeBackground = true, // 默认使用主题色
+    this.readerBackgroundColor = 0xFFFFFFFF, // 默认白色背景
+    this.readerTextColor = 0xFF000000, // 默认黑色文字
+    this.readerPresetIndex = 0, // 默认第一个预设（白纸）
+    this.readerUseCustomColor = false, // 默认使用预设
   });
 
   AppSettings copyWith({
@@ -103,6 +115,12 @@ class AppSettings {
     int? dynamicSchemeVariant,
     bool? useCustomTheme,
     bool? notchedDisplayMode,
+    // 阅读背景颜色
+    bool? readerUseThemeBackground,
+    int? readerBackgroundColor,
+    int? readerTextColor,
+    int? readerPresetIndex,
+    bool? readerUseCustomColor,
   }) {
     return AppSettings(
       fontSize: fontSize ?? this.fontSize,
@@ -130,6 +148,14 @@ class AppSettings {
           dynamicSchemeVariant ?? (this.dynamicSchemeVariant as int?) ?? 0,
       useCustomTheme: useCustomTheme ?? (this.useCustomTheme as bool?) ?? false,
       notchedDisplayMode: notchedDisplayMode ?? this.notchedDisplayMode,
+      // 阅读背景颜色
+      readerUseThemeBackground:
+          readerUseThemeBackground ?? this.readerUseThemeBackground,
+      readerBackgroundColor:
+          readerBackgroundColor ?? this.readerBackgroundColor,
+      readerTextColor: readerTextColor ?? this.readerTextColor,
+      readerPresetIndex: readerPresetIndex ?? this.readerPresetIndex,
+      readerUseCustomColor: readerUseCustomColor ?? this.readerUseCustomColor,
     );
   }
 
@@ -199,6 +225,15 @@ class SettingsNotifier extends Notifier<AppSettings> {
       dynamicSchemeVariant: prefs.getInt('setting_dynamicSchemeVariant') ?? 0,
       useCustomTheme: prefs.getBool('setting_useCustomTheme') ?? false,
       notchedDisplayMode: prefs.getBool('setting_notchedDisplayMode') ?? false,
+      // 阅读背景颜色
+      readerUseThemeBackground:
+          prefs.getBool('setting_readerUseThemeBackground') ?? true,
+      readerBackgroundColor:
+          prefs.getInt('setting_readerBackgroundColor') ?? 0xFFFFFFFF,
+      readerTextColor: prefs.getInt('setting_readerTextColor') ?? 0xFF000000,
+      readerPresetIndex: prefs.getInt('setting_readerPresetIndex') ?? 0,
+      readerUseCustomColor:
+          prefs.getBool('setting_readerUseCustomColor') ?? false,
     );
   }
 
@@ -241,6 +276,21 @@ class SettingsNotifier extends Notifier<AppSettings> {
     );
     await prefs.setBool('setting_useCustomTheme', state.useCustomTheme);
     await prefs.setBool('setting_notchedDisplayMode', state.notchedDisplayMode);
+    // 阅读背景颜色
+    await prefs.setBool(
+      'setting_readerUseThemeBackground',
+      state.readerUseThemeBackground,
+    );
+    await prefs.setInt(
+      'setting_readerBackgroundColor',
+      state.readerBackgroundColor,
+    );
+    await prefs.setInt('setting_readerTextColor', state.readerTextColor);
+    await prefs.setInt('setting_readerPresetIndex', state.readerPresetIndex);
+    await prefs.setBool(
+      'setting_readerUseCustomColor',
+      state.readerUseCustomColor,
+    );
   }
 
   void setFontSize(double size) {
@@ -384,6 +434,51 @@ class SettingsNotifier extends Notifier<AppSettings> {
 
   void setNotchedDisplayMode(bool value) {
     state = state.copyWith(notchedDisplayMode: value);
+    _save();
+  }
+
+  // ==================== 阅读背景颜色设置 ====================
+
+  void setReaderUseThemeBackground(bool value) {
+    state = state.copyWith(readerUseThemeBackground: value);
+    _save();
+  }
+
+  void setReaderBackgroundColor(int colorValue) {
+    state = state.copyWith(readerBackgroundColor: colorValue);
+    _save();
+  }
+
+  void setReaderTextColor(int colorValue) {
+    state = state.copyWith(readerTextColor: colorValue);
+    _save();
+  }
+
+  void setReaderPresetIndex(int index) {
+    state = state.copyWith(readerPresetIndex: index);
+    _save();
+  }
+
+  void setReaderUseCustomColor(bool value) {
+    state = state.copyWith(readerUseCustomColor: value);
+    _save();
+  }
+
+  /// 一次性设置所有阅读背景相关参数
+  void setReaderBackgroundConfig({
+    required bool useThemeBackground,
+    required int backgroundColor,
+    required int textColor,
+    required int presetIndex,
+    required bool useCustomColor,
+  }) {
+    state = state.copyWith(
+      readerUseThemeBackground: useThemeBackground,
+      readerBackgroundColor: backgroundColor,
+      readerTextColor: textColor,
+      readerPresetIndex: presetIndex,
+      readerUseCustomColor: useCustomColor,
+    );
     _save();
   }
 }

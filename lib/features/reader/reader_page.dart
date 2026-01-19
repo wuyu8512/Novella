@@ -16,6 +16,18 @@ import 'package:novella/features/settings/settings_page.dart';
 import 'package:novella/features/book/book_detail_page.dart';
 import 'package:palette_generator/palette_generator.dart';
 import 'package:soft_edge_blur/soft_edge_blur.dart';
+import 'package:html/parser.dart' as html_parser;
+import 'package:html/dom.dart' as dom;
+import 'package:novella/features/reader/reader_background_page.dart';
+
+enum _ReaderLayoutMode { standard, immersive, center }
+
+class _ReaderLayoutInfo {
+  final _ReaderLayoutMode mode;
+  final bool endsWithImage;
+
+  const _ReaderLayoutInfo(this.mode, {this.endsWithImage = false});
+}
 
 class ReaderPage extends ConsumerStatefulWidget {
   final int bid;
@@ -36,7 +48,7 @@ class ReaderPage extends ConsumerStatefulWidget {
 }
 
 class _ReaderPageState extends ConsumerState<ReaderPage>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   final _logger = Logger('ReaderPage');
   final _chapterService = ChapterService();
   final _bookService = BookService();
@@ -44,6 +56,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   final _progressService = ReadingProgressService();
   final _readingTimeService = ReadingTimeService();
   final ScrollController _scrollController = ScrollController();
+
+  late AnimationController _barsAnimController;
 
   ChapterContent? _chapter;
   String? _fontFamily;
@@ -63,10 +77,54 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   // ColorScheme 静态缓存
   static final Map<String, ColorScheme> _schemeCache = {};
 
+  /// 获取当前阅读背景色
+  Color _getReaderBackgroundColor(AppSettings settings) {
+    if (settings.readerUseThemeBackground) {
+      // 使用主题色
+      return (_dynamicColorScheme ?? Theme.of(context).colorScheme).surface;
+    }
+    if (settings.readerUseCustomColor) {
+      // 自定义颜色
+      return Color(settings.readerBackgroundColor);
+    }
+    // 预设颜色
+    return kReaderPresets[settings.readerPresetIndex.clamp(
+          0,
+          kReaderPresets.length - 1,
+        )]
+        .backgroundColor;
+  }
+
+  /// 获取当前阅读文字色
+  Color _getReaderTextColor(AppSettings settings) {
+    if (settings.readerUseThemeBackground) {
+      // 使用主题色
+      return (_dynamicColorScheme ?? Theme.of(context).colorScheme).onSurface;
+    }
+    if (settings.readerUseCustomColor) {
+      // 自定义颜色
+      return Color(settings.readerTextColor);
+    }
+    // 预设颜色
+    return kReaderPresets[settings.readerPresetIndex.clamp(
+          0,
+          kReaderPresets.length - 1,
+        )]
+        .textColor;
+  }
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+
+    // 初始化动画控制器，默认展开状态 (value: 1.0)
+    _barsAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 250),
+      value: 1.0,
+    );
+
     _scrollController.addListener(_onScroll);
     _loadChapter(widget.bid, widget.sortNum);
     // 开始记录阅读时长
@@ -78,6 +136,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   /// 提取封面颜色生成动态配色
   Future<void> _extractColors() async {
     if (widget.coverUrl == null || widget.coverUrl!.isEmpty) return;
+
+    // 检查是否开启了封面取色功能
+    final settings = ref.read(settingsProvider);
+    if (!settings.coverColorExtraction) return;
 
     final brightness =
         WidgetsBinding.instance.platformDispatcher.platformBrightness;
@@ -125,6 +187,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
   @override
   void dispose() {
+    _barsAnimController.dispose();
     _savePositionTimer?.cancel();
     // 结束阅读时长记录
     _readingTimeService.endSession();
@@ -174,9 +237,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
     // 边界自动显示菜单栏
     if ((offset <= 0 || offset >= maxScroll) && !_barsVisible) {
-      setState(() {
-        _barsVisible = true;
-      });
+      _toggleBars(); // 使用统一的切换方法
     }
 
     // 防抖保存（闲置 2 秒）
@@ -189,6 +250,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   void _toggleBars() {
     setState(() {
       _barsVisible = !_barsVisible;
+      if (_barsVisible) {
+        _barsAnimController.forward();
+      } else {
+        _barsAnimController.reverse();
+      }
     });
   }
 
@@ -337,6 +403,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           _chapter = chapter;
           _fontFamily = family;
           _loading = false;
+          _lastScrollPercent = 0.0;
         });
 
         // 构建后恢复进度
@@ -410,14 +477,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     final useFloatingControls = settings.notchedDisplayMode;
     final double topPadding = MediaQuery.of(context).padding.top;
 
-    // 动态计算模糊高度
-    // 展开模式 (Floating & Visible)：增加高度以实现更长更柔和的渐变 (状态栏 + 240px)
-    // 阅读模式 (Compact): 仅保护状态栏 (1.3倍)
-    final double blurHeight =
-        (useFloatingControls && _barsVisible)
-            ? topPadding + 240.0
-            : topPadding * 1.3;
-
     Widget content = Scaffold(
       body: Stack(
         children: [
@@ -430,46 +489,74 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                       ? const Center(child: CircularProgressIndicator())
                       : _error != null
                       ? _buildErrorView()
-                      : SoftEdgeBlur(
-                        edges: [
-                          EdgeBlur(
-                            type: EdgeType.topEdge,
-                            size: blurHeight,
+                      : AnimatedBuilder(
+                        animation: _barsAnimController,
+                        child: _buildWebContent(context, settings),
+                        builder: (context, child) {
+                          // 动态计算模糊高度和透明度
+                          // 高度: 收起时适当延长确保渐变自然(状态栏+80)，展开时大幅延伸(+200)
+                          final double blurHeight =
+                              lerpDouble(
+                                topPadding + 80.0,
+                                topPadding + 200.0,
+                                CurvedAnimation(
+                                  parent: _barsAnimController,
+                                  curve: Curves.easeOutCubic,
+                                ).value,
+                              )!;
 
-                            // 调整模糊度，配合增加的高度使用
-                            sigma: 50,
+                          // 透明度: 收起时(0.5)保持较强压暗，展开时(0.7)更深
+                          final double tintAlpha =
+                              lerpDouble(
+                                0.5,
+                                0.7,
+                                CurvedAnimation(
+                                  parent: _barsAnimController,
+                                  curve: Curves.easeOutCubic,
+                                ).value,
+                              )!;
+                          // 动态 Sigma: 随动画从 0 过渡到 30，消除突兀感
+                          final double currentSigma =
+                              lerpDouble(
+                                0.0,
+                                30.0,
+                                CurvedAnimation(
+                                  parent: _barsAnimController,
+                                  curve: Curves.easeOutCubic,
+                                ).value,
+                              )!;
 
-                            // 降低不透明度，使过渡更自然，减少断层感
-                            tintColor: Colors.black.withValues(alpha: 0.6),
-
-                            controlPoints: [
-                              // 起点
-                              ControlPoint(
-                                position: 0.0,
-                                type: ControlPointType.visible,
-                              ),
-
-                              // 仅在非沉浸模式下保留中间过点以保护状态栏
-                              // 展开时移除中间点，结合更大的高度实现丝滑的从顶到底渐变
-                              if (!(useFloatingControls && _barsVisible))
-                                ControlPoint(
-                                  position: 0.6,
-                                  type: ControlPointType.visible,
+                          return SoftEdgeBlur(
+                            edges: [
+                              EdgeBlur(
+                                type: EdgeType.topEdge,
+                                size: blurHeight,
+                                // 使用动态 sigma 同样实现平滑过渡
+                                sigma: currentSigma,
+                                tintColor: Colors.black.withValues(
+                                  alpha: tintAlpha,
                                 ),
-
-                              // 终点
-                              ControlPoint(
-                                position: 1.0,
-                                type: ControlPointType.transparent,
+                                controlPoints: [
+                                  // 控制点固定，不随状态移除，依靠 height 伸缩实现动画
+                                  ControlPoint(
+                                    position: 0.0,
+                                    type: ControlPointType.visible,
+                                  ),
+                                  ControlPoint(
+                                    position: 1.0,
+                                    type: ControlPointType.transparent,
+                                  ),
+                                ],
                               ),
                             ],
-                          ),
-                        ],
-                        child: _buildWebContent(context, settings),
+                            child: child!,
+                          );
+                        },
                       ),
             ),
           ),
 
+          // ... (rest of the build method)
           if (useFloatingControls) ...[
             // 悬浮模式：顶部毛玻璃功能区
             _buildFloatingTopBar(context),
@@ -526,38 +613,224 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         duration: const Duration(milliseconds: 400),
         curve: Curves.easeOutCubic,
         data: Theme.of(context).copyWith(
-          colorScheme: _dynamicColorScheme ?? Theme.of(context).colorScheme,
+          colorScheme:
+              (settings.coverColorExtraction ? _dynamicColorScheme : null) ??
+              Theme.of(context).colorScheme,
         ),
         child: content,
       ),
     );
   }
 
+  _ReaderLayoutInfo _analyzeLayout(String content) {
+    if (content.isEmpty) {
+      return const _ReaderLayoutInfo(_ReaderLayoutMode.standard);
+    }
+    try {
+      final doc = html_parser.parseFragment(content);
+
+      // 检查是否为单图模式：整章只有一张图片且无有效文字
+      final imgCount = doc.querySelectorAll('img').length;
+      final textContent = doc.text?.trim() ?? '';
+
+      if (imgCount == 1 && textContent.isEmpty) {
+        return const _ReaderLayoutInfo(_ReaderLayoutMode.center);
+      }
+
+      // 获取有效子节点（忽略空白文本）
+      final children =
+          doc.nodes.where((n) {
+            if (n is dom.Text) return n.text.trim().isNotEmpty;
+            if (n is dom.Element) return true;
+            return false;
+          }).toList();
+
+      bool endsWithImage = false;
+      if (children.isNotEmpty) {
+        final lastNode = children.last;
+        if (lastNode is dom.Element) {
+          if (lastNode.localName == 'img') {
+            endsWithImage = true;
+          } else if ({'p', 'div'}.contains(lastNode.localName) &&
+              lastNode.children.length == 1 &&
+              lastNode.children.first.localName == 'img') {
+            endsWithImage = true;
+          }
+        }
+      }
+
+      // 检查沉浸式置顶模式
+      // 条件：开头是图片，且紧接着是图片（连续>=2张），且全篇图片总数超过2张
+      if (children.isNotEmpty) {
+        int consecutiveImages = 0;
+        for (final node in children) {
+          bool isImg = false;
+          if (node is dom.Element) {
+            if (node.localName == 'img') {
+              isImg = true;
+            } else if ({'p', 'div'}.contains(node.localName) &&
+                node.children.length == 1 &&
+                node.children.first.localName == 'img') {
+              // 处理 <p><img></p> 的情况
+              isImg = true;
+            }
+          }
+          if (isImg)
+            consecutiveImages++;
+          else
+            break;
+        }
+
+        // 满足条件：开头连续图片>=2 且 总图片数>2
+        if (consecutiveImages >= 2 && imgCount > 2) {
+          return _ReaderLayoutInfo(
+            _ReaderLayoutMode.immersive,
+            endsWithImage: endsWithImage,
+          );
+        }
+      }
+
+      return _ReaderLayoutInfo(
+        _ReaderLayoutMode.standard,
+        endsWithImage: endsWithImage,
+      );
+    } catch (e) {
+      return const _ReaderLayoutInfo(_ReaderLayoutMode.standard);
+    }
+  }
+
   Widget _buildWebContent(BuildContext context, AppSettings settings) {
-    return NotificationListener<ScrollEndNotification>(
-      onNotification: (notification) {
-        // 滑动停止时强制刷新进度，确保百分比是最新的
-        // 即使菜单不收起，也要能看到最新的 "已读 x%"
-        if (mounted) setState(() {});
-        return false;
+    final double topPadding = MediaQuery.of(context).padding.top;
+    final double bottomPadding = MediaQuery.of(context).padding.bottom;
+
+    // 获取阅读背景色和文字色
+    final readerBackgroundColor = _getReaderBackgroundColor(settings);
+    final readerTextColor = _getReaderTextColor(settings);
+
+    // 分析布局模式
+    final layoutInfo =
+        _chapter != null
+            ? _analyzeLayout(_chapter!.content)
+            : const _ReaderLayoutInfo(_ReaderLayoutMode.standard);
+
+    // HtmlWidget 配置
+    final htmlWidget = HtmlWidget(
+      _chapter!.content,
+      textStyle: TextStyle(
+        fontFamily: _fontFamily,
+        fontSize: settings.fontSize,
+        height: 1.6,
+        color: readerTextColor, // 应用阅读文字色
+      ),
+      // 自定义样式：实现文字带边距，图片满宽
+      customStylesBuilder: (element) {
+        // ... (lines 646-656) - This part is same logic but need to be careful with replace range
+        // I will copy the original customStylesBuilder content or leave it if range allows.
+        // The replace range includes _buildWebContent start, so I must provide full implementation or carefully slice.
+        // It's safer to provide full implementation of _buildWebContent up to where layout is used.
+
+        // 图片：强制满宽，无边距，消除底部空隙
+        if (element.localName == 'img') {
+          return {
+            'width': '100%',
+            'height': 'auto',
+            'margin': '0',
+            'padding': '0',
+            'display': 'block',
+            // 关键：消除图片底部的行高空隙
+            'vertical-align': 'bottom',
+          };
+        }
+
+        // 文本容器及其它块级元素
+        if ({
+          'p',
+          'div',
+          'section',
+          'article',
+          'blockquote',
+          'h1',
+          'h2',
+          'h3',
+          'h4',
+          'h5',
+          'h6',
+          'li',
+        }.contains(element.localName)) {
+          final hasImage = element.getElementsByTagName('img').isNotEmpty;
+
+          if (hasImage) {
+            // 有图片：无边距，无行高，满宽
+            return {
+              'margin': '0', // 确保无外边距，图片贴边
+              'padding': '0',
+              'line-height': '0',
+              'text-align': 'center',
+            };
+          } else {
+            // 纯文本：加水平边距
+            final styles = <String, String>{
+              'padding-left': '16px',
+              'padding-right': '16px',
+              'margin-bottom': '1em',
+            };
+
+            return styles;
+          }
+        }
+
+        // 兜底
+        if (element.localName == 'body') {
+          return {'margin': '0', 'padding': '0', 'line-height': '1.6'};
+        }
+        return null;
       },
-      child: SingleChildScrollView(
+    );
+
+    Widget content;
+
+    if (layoutInfo.mode == _ReaderLayoutMode.center) {
+      // 居中模式：使用 LayoutBuilder + Constraints 确保内容垂直居中
+      content = LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            controller: _scrollController,
+            padding: EdgeInsets.zero,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: Center(child: htmlWidget),
+            ),
+          );
+        },
+      );
+    } else {
+      // 标准模式 / 沉浸模式
+      // 沉浸模式 padding=0，标准模式 padding=状态栏+20
+      final double paddingTop =
+          layoutInfo.mode == _ReaderLayoutMode.immersive ? 0 : topPadding + 20;
+
+      // 底部留白逻辑：如果以图片结尾，且开启了endsWithImage，则底部留白为0
+      final double paddingBottom =
+          layoutInfo.endsWithImage ? 0 : 80.0 + bottomPadding;
+
+      content = SingleChildScrollView(
         controller: _scrollController,
-        padding: EdgeInsets.fromLTRB(
-          16.0,
-          MediaQuery.of(context).padding.top + 20, // 状态栏边距+留白
-          16.0,
-          // 底部导航栏留白
-          80.0 + MediaQuery.of(context).padding.bottom,
-        ),
-        child: HtmlWidget(
-          _chapter!.content,
-          textStyle: TextStyle(
-            fontFamily: _fontFamily,
-            fontSize: settings.fontSize,
-            height: 1.6,
-          ),
-        ),
+        padding: EdgeInsets.fromLTRB(0, paddingTop, 0, paddingBottom),
+        child: htmlWidget,
+      );
+    }
+
+    // 包裹背景色容器
+    return Container(
+      color: readerBackgroundColor, // 应用阅读背景色
+      child: NotificationListener<ScrollEndNotification>(
+        onNotification: (notification) {
+          // 滑动停止时强制刷新进度，确保百分比是最新的
+          // 即使菜单不收起，也要能看到最新的 "已读 x%"
+          if (mounted) setState(() {});
+          return false;
+        },
+        child: content,
       ),
     );
   }
@@ -830,7 +1103,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               _buildFloatingButton(
                 icon: Icons.palette_outlined,
                 onTap: () {
-                  // TODO: 阅读主题切换
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const ReaderBackgroundPage(),
+                    ),
+                  );
                 },
               ),
               const SizedBox(height: 12),
@@ -959,25 +1236,45 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                       final isCurrentChapter = sortNum == _chapter?.sortNum;
 
                       return ListTile(
-                        leading: Icon(
-                          isCurrentChapter
-                              ? Icons.bookmark
-                              : Icons.bookmark_border,
-                          color:
-                              isCurrentChapter
-                                  ? colorScheme.primary
-                                  : colorScheme.onSurfaceVariant,
-                        ),
-                        title: Text(
-                          chapter.title,
-                          style: TextStyle(
-                            color:
-                                isCurrentChapter ? colorScheme.primary : null,
-                            fontWeight:
-                                isCurrentChapter ? FontWeight.bold : null,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        // 移除 leading，改用 Row 在 title 中布局以保证对齐
+                        title: Row(
+                          crossAxisAlignment: CrossAxisAlignment.baseline,
+                          textBaseline: TextBaseline.alphabetic,
+                          children: [
+                            SizedBox(
+                              width: 40,
+                              child: Text(
+                                '$sortNum',
+                                textAlign: TextAlign.center,
+                                style: textTheme.bodyLarge?.copyWith(
+                                  color:
+                                      isCurrentChapter
+                                          ? colorScheme.primary
+                                          : colorScheme.onSurfaceVariant,
+                                  fontWeight:
+                                      isCurrentChapter ? FontWeight.bold : null,
+                                  height: 1.0, // 强制行高一致，减少字体度量差异的影响
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Text(
+                                chapter.title,
+                                style: textTheme.bodyLarge?.copyWith(
+                                  color:
+                                      isCurrentChapter
+                                          ? colorScheme.primary
+                                          : null,
+                                  fontWeight:
+                                      isCurrentChapter ? FontWeight.bold : null,
+                                  height: 1.0, // 强制行高一致
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
                         ),
                         trailing:
                             isCurrentChapter
