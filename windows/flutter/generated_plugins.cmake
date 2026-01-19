@@ -3,6 +3,7 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  battery_plus
   desktop_webview_window
   dynamic_color
   flutter_inappwebview_windows

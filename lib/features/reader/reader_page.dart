@@ -20,6 +20,7 @@ import 'package:html/parser.dart' as html_parser;
 import 'package:html/dom.dart' as dom;
 import 'package:novella/features/reader/reader_background_page.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
+import 'package:battery_plus/battery_plus.dart';
 
 enum _ReaderLayoutMode { standard, immersive, center }
 
@@ -78,6 +79,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   // ColorScheme 静态缓存
   static final Map<String, ColorScheme> _schemeCache = {};
 
+  // 顶部信息栏状态
+  final Battery _battery = Battery();
+  int _batteryLevel = 100;
+  String _timeString = '';
+  Timer? _infoTimer;
+
   /// 获取当前阅读背景色
   Color _getReaderBackgroundColor(AppSettings settings) {
     if (settings.readerUseThemeBackground) {
@@ -132,6 +139,47 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     _readingTimeService.startSession();
     // 提取封面颜色用于动态主题
     _extractColors();
+
+    // 初始化全屏和信息栏
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    _initInfoBar();
+  }
+
+  void _initInfoBar() {
+    _updateTime();
+    _updateBattery();
+    // 每分钟更新一次时间 (和电量)
+    _infoTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+      _updateTime();
+      if (timer.tick % 2 == 0) _updateBattery(); // 每分钟检查一次电量
+    });
+  }
+
+  void _updateTime() {
+    final now = DateTime.now();
+    final hour = now.hour;
+    final minute = now.minute.toString().padLeft(2, '0');
+    final period = hour < 12 ? '上午' : '下午';
+    final displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
+
+    if (mounted) {
+      setState(() {
+        _timeString = '$period $displayHour:$minute';
+      });
+    }
+  }
+
+  Future<void> _updateBattery() async {
+    try {
+      final level = await _battery.batteryLevel;
+      if (mounted) {
+        setState(() {
+          _batteryLevel = level;
+        });
+      }
+    } catch (e) {
+      _logger.warning('Failed to get battery level: $e');
+    }
   }
 
   /// 提取封面颜色生成动态配色
@@ -209,6 +257,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     WidgetsBinding.instance.removeObserver(this);
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
+    _infoTimer?.cancel();
+    // 退出阅读页时恢复系统栏显示
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
   }
 
@@ -796,11 +847,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 2),
-                      // 阅读进度
+                      // 阅读进度 (时间 · 电量 · 百分比)
                       Text(
-                        '${_chapter?.sortNum ?? 0}/${widget.totalChapters} · 已读 ${(_lastScrollPercent * 100).toInt()}%',
+                        '$_timeString · 设备电量 $_batteryLevel% · 本章已读 ${(_lastScrollPercent * 100).toInt()}%',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: colorScheme.onSurfaceVariant,
+                          fontSize: 11, // 稍微调小一点以适应更多内容
                         ),
                       ),
                     ],
@@ -1019,7 +1071,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         return DraggableScrollableSheet(
           initialChildSize: 0.6,
           minChildSize: 0.3,
-          maxChildSize: 0.9,
+          maxChildSize: 0.6,
           expand: false,
           builder: (context, scrollController) {
             return Column(
