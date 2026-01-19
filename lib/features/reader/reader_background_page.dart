@@ -209,7 +209,7 @@ class _ReaderBackgroundPageState extends ConsumerState<ReaderBackgroundPage> {
               child: Text(
                 '这是一段示例文字，用于预览当前选择的背景颜色和文字颜色效果。'
                 '\n\n'
-                '良好的搭配可以有效减少眼疲劳，提升阅读体验。'
+                '良好搭配可以有效减少眼疲劳，提升阅读体验。'
                 '\n\n'
                 '如果喜欢这款软件，还请点亮仓库的小星星~',
                 style: TextStyle(color: textColor, fontSize: 16, height: 1.6),
