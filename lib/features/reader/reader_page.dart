@@ -849,39 +849,42 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             children: [
               // 返回按钮 - AdaptiveFloatingActionButton
               // 返回按钮
-              // TODO: iOS 26+ 液态玻璃按钮导致闪退，暂时禁用
-              // if (PlatformInfo.isIOS26OrHigher())
-              //   AdaptiveButton.sfSymbol(
-              //     onPressed: () => Navigator.pop(context),
-              //     sfSymbol: const SFSymbol('chevron.left'),
-              //     style: AdaptiveButtonStyle.glass,
-              //     size: AdaptiveButtonSize.medium,
-              //     borderRadius: BorderRadius.circular(1000),
-              //     useSmoothRectangleBorder: false,
-              //   )
-              // else
-              Builder(
-                builder: (context) {
-                  final settings = ref.watch(settingsProvider);
-                  final colorScheme =
-                      (settings.coverColorExtraction
-                          ? _dynamicColorScheme
-                          : null) ??
-                      Theme.of(context).colorScheme;
-                  return AdaptiveFloatingActionButton(
-                    mini: true,
+              if (PlatformInfo.isIOS26OrHigher())
+                SizedBox(
+                  width: 38,
+                  height: 38,
+                  child: AdaptiveButton.sfSymbol(
                     onPressed: () => Navigator.pop(context),
-                    backgroundColor: colorScheme.primaryContainer,
-                    foregroundColor: colorScheme.onPrimaryContainer,
-                    child: Icon(
-                      PlatformInfo.isIOS
-                          ? CupertinoIcons.chevron_left
-                          : Icons.arrow_back,
-                      size: 20,
-                    ),
-                  );
-                },
-              ),
+                    sfSymbol: const SFSymbol('chevron.left', size: 17),
+                    style: AdaptiveButtonStyle.glass,
+                    borderRadius: BorderRadius.circular(1000),
+                    useSmoothRectangleBorder: false,
+                    padding: EdgeInsets.zero,
+                  ),
+                )
+              else
+                Builder(
+                  builder: (context) {
+                    final settings = ref.watch(settingsProvider);
+                    final colorScheme =
+                        (settings.coverColorExtraction
+                            ? _dynamicColorScheme
+                            : null) ??
+                        Theme.of(context).colorScheme;
+                    return AdaptiveFloatingActionButton(
+                      mini: true,
+                      onPressed: () => Navigator.pop(context),
+                      backgroundColor: colorScheme.primaryContainer,
+                      foregroundColor: colorScheme.onPrimaryContainer,
+                      child: Icon(
+                        PlatformInfo.isIOS
+                            ? CupertinoIcons.chevron_left
+                            : Icons.arrow_back,
+                        size: 20,
+                      ),
+                    );
+                  },
+                ),
               const SizedBox(width: 12),
 
               // 章节信息卡片 - 根据标题长度动态收缩
@@ -1097,82 +1100,90 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               mainAxisSize: MainAxisSize.min,
               children: [
                 // 上一章
-                // TODO: iOS 26+ 液态玻璃按钮导致闪退，暂时禁用
-                // if (PlatformInfo.isIOS26OrHigher())
-                //   AdaptiveButton.sfSymbol(
-                //     onPressed: _targetSortNum > 1 ? _onPrev : null,
-                //     sfSymbol: const SFSymbol('chevron.left'),
-                //     style: AdaptiveButtonStyle.glass,
-                //     size: AdaptiveButtonSize.medium,
-                //     borderRadius: BorderRadius.circular(1000),
-                //     useSmoothRectangleBorder: false,
-                //   )
-                // else
-                Builder(
-                  builder: (context) {
-                    final settings = ref.watch(settingsProvider);
-                    final colorScheme =
-                        (settings.coverColorExtraction
-                            ? _dynamicColorScheme
-                            : null) ??
-                        Theme.of(context).colorScheme;
-                    return AdaptiveFloatingActionButton(
-                      mini: true,
-                      onPressed:
-                          _chapter != null && _chapter!.sortNum > 1
-                              ? _onPrev
-                              : null,
-                      backgroundColor: colorScheme.primaryContainer,
-                      foregroundColor: colorScheme.onPrimaryContainer,
-                      child: Icon(
-                        PlatformInfo.isIOS
-                            ? CupertinoIcons.chevron_left
-                            : Icons.chevron_left,
-                        size: 20,
-                      ),
-                    );
-                  },
-                ),
+                if (PlatformInfo.isIOS26OrHigher())
+                  SizedBox(
+                    width: 38,
+                    height: 38,
+                    child: AdaptiveButton.sfSymbol(
+                      onPressed: _targetSortNum > 1 ? _onPrev : null,
+                      sfSymbol: const SFSymbol('chevron.left', size: 17),
+                      style: AdaptiveButtonStyle.glass,
+                      borderRadius: BorderRadius.circular(1000),
+                      useSmoothRectangleBorder: false,
+                      padding: EdgeInsets.zero,
+                    ),
+                  )
+                else
+                  Builder(
+                    builder: (context) {
+                      final settings = ref.watch(settingsProvider);
+                      final colorScheme =
+                          (settings.coverColorExtraction
+                              ? _dynamicColorScheme
+                              : null) ??
+                          Theme.of(context).colorScheme;
+                      return AdaptiveFloatingActionButton(
+                        mini: true,
+                        onPressed:
+                            _chapter != null && _chapter!.sortNum > 1
+                                ? _onPrev
+                                : null,
+                        backgroundColor: colorScheme.primaryContainer,
+                        foregroundColor: colorScheme.onPrimaryContainer,
+                        child: Icon(
+                          PlatformInfo.isIOS
+                              ? CupertinoIcons.chevron_left
+                              : Icons.chevron_left,
+                          size: 20,
+                        ),
+                      );
+                    },
+                  ),
                 const SizedBox(width: 8),
                 // 下一章
-                // TODO: iOS 26+ 液态玻璃按钮导致闪退，暂时禁用
-                // if (PlatformInfo.isIOS26OrHigher())
-                //   AdaptiveButton.sfSymbol(
-                //     onPressed:
-                //         _targetSortNum < widget.totalChapters ? _onNext : null,
-                //     sfSymbol: const SFSymbol('chevron.right'),
-                //     style: AdaptiveButtonStyle.glass,
-                //     size: AdaptiveButtonSize.medium,
-                //     borderRadius: BorderRadius.circular(1000),
-                //     useSmoothRectangleBorder: false,
-                //   )
-                // else
-                Builder(
-                  builder: (context) {
-                    final settings = ref.watch(settingsProvider);
-                    final colorScheme =
-                        (settings.coverColorExtraction
-                            ? _dynamicColorScheme
-                            : null) ??
-                        Theme.of(context).colorScheme;
-                    return AdaptiveFloatingActionButton(
-                      mini: true,
+                if (PlatformInfo.isIOS26OrHigher())
+                  SizedBox(
+                    width: 38,
+                    height: 38,
+                    child: AdaptiveButton.sfSymbol(
                       onPressed:
-                          _chapter != null &&
-                                  _chapter!.sortNum < widget.totalChapters
+                          _targetSortNum < widget.totalChapters
                               ? _onNext
                               : null,
-                      backgroundColor: colorScheme.primaryContainer,
-                      foregroundColor: colorScheme.onPrimaryContainer,
-                      child: Icon(
-                        PlatformInfo.isIOS
-                            ? CupertinoIcons.chevron_right
-                            : Icons.chevron_right,
-                        size: 20,
-                      ),
-                    );
-                  },
-                ),
+                      sfSymbol: const SFSymbol('chevron.right', size: 17),
+                      style: AdaptiveButtonStyle.glass,
+                      borderRadius: BorderRadius.circular(1000),
+                      useSmoothRectangleBorder: false,
+                      padding: EdgeInsets.zero,
+                    ),
+                  )
+                else
+                  Builder(
+                    builder: (context) {
+                      final settings = ref.watch(settingsProvider);
+                      final colorScheme =
+                          (settings.coverColorExtraction
+                              ? _dynamicColorScheme
+                              : null) ??
+                          Theme.of(context).colorScheme;
+                      return AdaptiveFloatingActionButton(
+                        mini: true,
+                        onPressed:
+                            _chapter != null &&
+                                    _chapter!.sortNum < widget.totalChapters
+                                ? _onNext
+                                : null,
+                        backgroundColor: colorScheme.primaryContainer,
+                        foregroundColor: colorScheme.onPrimaryContainer,
+                        child: Icon(
+                          PlatformInfo.isIOS
+                              ? CupertinoIcons.chevron_right
+                              : Icons.chevron_right,
+                          size: 20,
+                        ),
+                      );
+                    },
+                  ),
               ],
             ),
           ),
