@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui';
 import 'dart:developer' as developer;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
@@ -85,6 +86,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   String _timeString = '';
   Timer? _infoTimer;
 
+  // 章节加载版本号（用于打断旧请求）
+  int _loadVersion = 0;
+  // 目标章节号（用于连续点击时追踪最终目标）
+  late int _targetSortNum;
+
   /// 获取当前阅读背景色
   Color _getReaderBackgroundColor(AppSettings settings) {
     if (settings.readerUseThemeBackground) {
@@ -134,6 +140,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
 
     _scrollController.addListener(_onScroll);
+    _targetSortNum = widget.sortNum; // 初始化目标章节号
     _loadChapter(widget.bid, widget.sortNum);
     // 开始记录阅读时长
     _readingTimeService.startSession();
@@ -414,9 +421,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   Future<void> _loadChapter(int bid, int sortNum) async {
     _logger.info('Requesting chapter with SortNum: $sortNum...');
 
-    // 加载新章前保存当前进度
+    // 版本号递增，用于打断旧请求
+    final currentVersion = ++_loadVersion;
+
+    // 加载新章前保存当前进度（不阻塞新请求）
     if (_chapter != null) {
-      await _saveCurrentPosition();
+      _saveCurrentPosition(); // 不 await，允许打断
     }
 
     setState(() {
@@ -434,6 +444,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         sortNum,
         convert: settings.convertType == 'none' ? null : settings.convertType,
       );
+
+      // 打断检查：如果有新请求，放弃当前结果
+      if (currentVersion != _loadVersion) {
+        _logger.info(
+          'Load interrupted, version $currentVersion != $_loadVersion',
+        );
+        return;
+      }
+
       _logger.info('Chapter loaded: ${chapter.title}');
 
       // 2. 加载混淆字体（带缓存控制）
@@ -445,12 +464,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           cacheEnabled: settings.fontCacheEnabled,
           cacheLimit: settings.fontCacheLimit,
         );
+
+        // 再次打断检查
+        if (currentVersion != _loadVersion) {
+          _logger.info(
+            'Load interrupted after font, version $currentVersion != $_loadVersion',
+          );
+          return;
+        }
+
         _logger.info(
           'Font loaded: $family (cache: ${settings.fontCacheEnabled}, limit: ${settings.fontCacheLimit})',
         );
       }
 
-      if (mounted) {
+      if (mounted && currentVersion == _loadVersion) {
         setState(() {
           _chapter = chapter;
           _fontFamily = family;
@@ -460,11 +488,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
         // 构建后恢复进度
         WidgetsBinding.instance.addPostFrameCallback((_) async {
+          // 最终打断检查
+          if (currentVersion != _loadVersion) return;
+
           await _restoreScrollPosition();
 
           // Bug修复：无论是否恢复进度，都保存当前章节到服务端
           // 确保点击章节进入后即使不滑动也能同步
-          if (mounted && _chapter != null) {
+          if (mounted && _chapter != null && currentVersion == _loadVersion) {
             if (_scrollController.hasClients &&
                 _scrollController.position.maxScrollExtent > 0) {
               // 布局完成，保存当前位置（包含章节信息）
@@ -493,6 +524,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
         });
       }
     } catch (e) {
+      // 打断时不处理错误
+      if (currentVersion != _loadVersion) return;
+
       _logger.severe('Error loading chapter: $e');
       if (mounted) {
         setState(() {
@@ -504,8 +538,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   void _onPrev() {
-    if (_chapter != null && _chapter!.sortNum > 1) {
-      _loadChapter(widget.bid, _chapter!.sortNum - 1);
+    if (_targetSortNum > 1) {
+      _targetSortNum--;
+      _loadChapter(widget.bid, _targetSortNum);
     } else {
       ScaffoldMessenger.of(
         context,
@@ -514,8 +549,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   }
 
   void _onNext() {
-    if (_chapter != null && _chapter!.sortNum < widget.totalChapters) {
-      _loadChapter(widget.bid, _chapter!.sortNum + 1);
+    if (_targetSortNum < widget.totalChapters) {
+      _targetSortNum++;
+      _loadChapter(widget.bid, _targetSortNum);
     } else {
       ScaffoldMessenger.of(
         context,
@@ -799,7 +835,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
   /// 悬浮顶部功能区
   Widget _buildFloatingTopBar(BuildContext context) {
     final topPadding = MediaQuery.of(context).padding.top;
-    final colorScheme = Theme.of(context).colorScheme;
 
     return Positioned(
       top: topPadding + 8,
@@ -813,62 +848,107 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           child: Row(
             children: [
               // 返回按钮 - AdaptiveFloatingActionButton
-              AdaptiveFloatingActionButton(
-                mini: true,
-                onPressed: () => Navigator.pop(context),
-                child: Icon(
-                  PlatformInfo.isIOS
-                      ? CupertinoIcons.chevron_left
-                      : Icons.arrow_back,
-                  size: 20,
+              // 返回按钮
+              if (PlatformInfo.isIOS26OrHigher())
+                SizedBox(
+                  width: 32,
+                  height: 32,
+                  child: AdaptiveButton.sfSymbol(
+                    onPressed: () => Navigator.pop(context),
+                    sfSymbol: const SFSymbol('chevron.left', size: 16),
+                    style: AdaptiveButtonStyle.glass,
+                    borderRadius: BorderRadius.circular(1000),
+                    useSmoothRectangleBorder: false,
+                    padding: EdgeInsets.zero,
+                  ),
+                )
+              else
+                Builder(
+                  builder: (context) {
+                    final settings = ref.watch(settingsProvider);
+                    final colorScheme =
+                        (settings.coverColorExtraction
+                            ? _dynamicColorScheme
+                            : null) ??
+                        Theme.of(context).colorScheme;
+                    return AdaptiveFloatingActionButton(
+                      mini: true,
+                      onPressed: () => Navigator.pop(context),
+                      backgroundColor: colorScheme.primaryContainer,
+                      foregroundColor: colorScheme.onPrimaryContainer,
+                      child: Icon(
+                        PlatformInfo.isIOS
+                            ? CupertinoIcons.chevron_left
+                            : Icons.arrow_back,
+                        size: 20,
+                      ),
+                    );
+                  },
                 ),
-              ),
               const SizedBox(width: 12),
 
-              // 章节信息卡片 - AdaptiveCard
+              // 章节信息卡片
+              // AdaptiveBlurView 内置自动回退机制：
+              // - iOS 26+: 原生 UIVisualEffectView
+              // - 其他平台: BackdropFilter + 反光渐变 + 噪点层 + 内发光边框
               Expanded(
-                child: AdaptiveCard(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 10,
-                  ),
-                  borderRadius: BorderRadius.circular(22),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // 章节标题
-                      Text(
-                        _chapter?.title ?? '',
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w600,
+                child: Builder(
+                  builder: (context) {
+                    // 根据阅读背景亮度动态计算文字颜色
+                    final settings = ref.watch(settingsProvider);
+                    final readerBgColor = _getReaderBackgroundColor(settings);
+                    // computeLuminance 返回 0.0-1.0，越接近 1 越亮
+                    final isLightBg = readerBgColor.computeLuminance() > 0.5;
+                    final textColor = isLightBg ? Colors.black : Colors.white;
+                    final subTextColor = textColor.withValues(alpha: 0.7);
+
+                    return AdaptiveBlurView(
+                      blurStyle: BlurStyle.systemMaterial,
+                      borderRadius: BorderRadius.circular(100),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 2),
-                      // 阅读进度 (时间 · 电量 · 百分比)
-                      Text(
-                        '$_timeString · 电量 $_batteryLevel% · 本章已读 ${(_lastScrollPercent * 100).toInt()}%',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                          fontSize: 11, // 稍微调小一点以适应更多内容
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // 章节标题
+                            Text(
+                              _loading ? '加载中...' : (_chapter?.title ?? ''),
+                              style: Theme.of(
+                                context,
+                              ).textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: textColor,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            // 阅读进度
+                            Text(
+                              '$_timeString · 电量 $_batteryLevel% · 已读 ${(_lastScrollPercent * 100).toInt()}%',
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(color: subTextColor, fontSize: 11),
+                            ),
+                          ],
                         ),
                       ),
-                    ],
-                  ),
+                    );
+                  },
                 ),
               ),
               const SizedBox(width: 12),
 
-              // 更多菜单按钮（章节列表 + 阅读背景）
               // 更多菜单按钮（章节列表 + 阅读背景）
               if (Platform.isIOS || Platform.isMacOS)
                 AdaptivePopupMenuButton.icon<String>(
                   icon:
                       PlatformInfo.isIOS26OrHigher()
-                          ? 'ellipsis.circle'
-                          : CupertinoIcons.ellipsis_circle,
+                          ? 'ellipsis'
+                          : CupertinoIcons.ellipsis,
                   buttonStyle: PopupButtonStyle.glass,
                   items: [
                     AdaptivePopupMenuItem(
@@ -904,52 +984,63 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                   },
                 )
               else
-                PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_horiz),
-                  itemBuilder: (context) {
-                    final colorScheme = Theme.of(context).colorScheme;
-                    return [
-                      PopupMenuItem(
-                        value: 'chapters',
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.list,
-                              color: colorScheme.onSurfaceVariant,
+                Builder(
+                  builder: (context) {
+                    // 根据阅读背景亮度动态计算图标颜色
+                    final settings = ref.watch(settingsProvider);
+                    final readerBgColor = _getReaderBackgroundColor(settings);
+                    final isLightBg = readerBgColor.computeLuminance() > 0.5;
+                    final iconColor = isLightBg ? Colors.black : Colors.white;
+
+                    return PopupMenuButton<String>(
+                      icon: Icon(Icons.more_horiz, color: iconColor),
+                      itemBuilder: (context) {
+                        final colorScheme = Theme.of(context).colorScheme;
+                        return [
+                          PopupMenuItem(
+                            value: 'chapters',
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.list,
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                                const SizedBox(width: 12),
+                                const Text('章节列表'),
+                              ],
                             ),
-                            const SizedBox(width: 12),
-                            const Text('章节列表'),
-                          ],
-                        ),
-                      ),
-                      PopupMenuItem(
-                        value: 'background',
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.palette_outlined,
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                            const SizedBox(width: 12),
-                            const Text('阅读背景'),
-                          ],
-                        ),
-                      ),
-                    ];
-                  },
-                  onSelected: (value) {
-                    switch (value) {
-                      case 'chapters':
-                        _showChapterListSheet(context);
-                        break;
-                      case 'background':
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (context) => const ReaderBackgroundPage(),
                           ),
-                        );
-                        break;
-                    }
+                          PopupMenuItem(
+                            value: 'background',
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.palette_outlined,
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                                const SizedBox(width: 12),
+                                const Text('阅读背景'),
+                              ],
+                            ),
+                          ),
+                        ];
+                      },
+                      onSelected: (value) {
+                        switch (value) {
+                          case 'chapters':
+                            _showChapterListSheet(context);
+                            break;
+                          case 'background':
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder:
+                                    (context) => const ReaderBackgroundPage(),
+                              ),
+                            );
+                            break;
+                        }
+                      },
+                    );
                   },
                 ),
             ],
@@ -979,35 +1070,94 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
               mainAxisSize: MainAxisSize.min,
               children: [
                 // 上一章
-                AdaptiveFloatingActionButton(
-                  mini: true,
-                  onPressed:
-                      _chapter != null && _chapter!.sortNum > 1
-                          ? _onPrev
-                          : null,
-                  child: Icon(
-                    PlatformInfo.isIOS
-                        ? CupertinoIcons.chevron_left
-                        : Icons.chevron_left,
-                    size: 20,
+                if (PlatformInfo.isIOS26OrHigher())
+                  SizedBox(
+                    width: 32,
+                    height: 32,
+                    child: AdaptiveButton.sfSymbol(
+                      onPressed:
+                          _chapter != null && _chapter!.sortNum > 1
+                              ? _onPrev
+                              : null,
+                      sfSymbol: const SFSymbol('chevron.left', size: 16),
+                      style: AdaptiveButtonStyle.glass,
+                      borderRadius: BorderRadius.circular(1000),
+                      useSmoothRectangleBorder: false,
+                      padding: EdgeInsets.zero,
+                    ),
+                  )
+                else
+                  Builder(
+                    builder: (context) {
+                      final settings = ref.watch(settingsProvider);
+                      final colorScheme =
+                          (settings.coverColorExtraction
+                              ? _dynamicColorScheme
+                              : null) ??
+                          Theme.of(context).colorScheme;
+                      return AdaptiveFloatingActionButton(
+                        mini: true,
+                        onPressed:
+                            _chapter != null && _chapter!.sortNum > 1
+                                ? _onPrev
+                                : null,
+                        backgroundColor: colorScheme.primaryContainer,
+                        foregroundColor: colorScheme.onPrimaryContainer,
+                        child: Icon(
+                          PlatformInfo.isIOS
+                              ? CupertinoIcons.chevron_left
+                              : Icons.chevron_left,
+                          size: 20,
+                        ),
+                      );
+                    },
                   ),
-                ),
                 const SizedBox(width: 8),
                 // 下一章
-                AdaptiveFloatingActionButton(
-                  mini: true,
-                  onPressed:
-                      _chapter != null &&
-                              _chapter!.sortNum < widget.totalChapters
-                          ? _onNext
-                          : null,
-                  child: Icon(
-                    PlatformInfo.isIOS
-                        ? CupertinoIcons.chevron_right
-                        : Icons.chevron_right,
-                    size: 20,
+                if (PlatformInfo.isIOS26OrHigher())
+                  SizedBox(
+                    width: 32,
+                    height: 32,
+                    child: AdaptiveButton.sfSymbol(
+                      onPressed:
+                          _chapter != null &&
+                                  _chapter!.sortNum < widget.totalChapters
+                              ? _onNext
+                              : null,
+                      sfSymbol: const SFSymbol('chevron.right', size: 16),
+                      style: AdaptiveButtonStyle.glass,
+                      borderRadius: BorderRadius.circular(1000),
+                      useSmoothRectangleBorder: false,
+                      padding: EdgeInsets.zero,
+                    ),
+                  )
+                else
+                  Builder(
+                    builder: (context) {
+                      final settings = ref.watch(settingsProvider);
+                      final colorScheme =
+                          (settings.coverColorExtraction
+                              ? _dynamicColorScheme
+                              : null) ??
+                          Theme.of(context).colorScheme;
+                      return AdaptiveFloatingActionButton(
+                        mini: true,
+                        onPressed:
+                            _chapter != null &&
+                                    _chapter!.sortNum < widget.totalChapters
+                                ? _onNext
+                                : null,
+                        backgroundColor: colorScheme.primaryContainer,
+                        foregroundColor: colorScheme.onPrimaryContainer,
+                        child: Icon(
+                          PlatformInfo.isIOS
+                              ? CupertinoIcons.chevron_right
+                              : Icons.chevron_right,
+                          size: 20,
+                        ),
+                      );
+                    },
                   ),
-                ),
               ],
             ),
           ),
@@ -1161,6 +1311,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                         onTap: () {
                           Navigator.pop(context);
                           if (sortNum != _chapter?.sortNum) {
+                            _targetSortNum = sortNum; // 同步目标章节号
                             _loadChapter(widget.bid, sortNum);
                           }
                         },
