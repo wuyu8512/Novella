@@ -8,53 +8,45 @@
 
 **简洁的轻小说阅读器**
 
-基于 Flutter + Rust FFI 构建，为您提供流畅、纯净的阅读体验。
+基于 Flutter + Rust FFI 构建，提供纯净的界面和阅读体验。
+如果喜欢这款软件，还请点亮仓库的小星星~
 
 <br/>
 
-<div align="center">
-    <img src="assets/screenshots_1.PNG" width="23%" />
-    <img src="assets/screenshots_2.PNG" width="23%" />
-    <img src="assets/screenshots_3.PNG" width="23%" />
-    <img src="assets/screenshots_4.PNG" width="23%" />
+<div style="display: flex; overflow-x: auto; gap: 10px; padding: 10px;">
+    <img src="assets/screenshots_0.PNG" style="width: 24%; border-radius: 10px; flex-shrink: 0;" />
+    <img src="assets/screenshots_1.PNG" style="width: 24%; border-radius: 10px; flex-shrink: 0;" />
+    <img src="assets/screenshots_2.PNG" style="width: 24%; border-radius: 10px; flex-shrink: 0;" />
+    <img src="assets/screenshots_3.PNG" style="width: 24%; border-radius: 10px; flex-shrink: 0;" />
+    <img src="assets/screenshots_4.PNG" style="width: 24%; border-radius: 10px; flex-shrink: 0;" />
+    <img src="assets/screenshots_5.PNG" style="width: 24%; border-radius: 10px; flex-shrink: 0;" />
+    <img src="assets/screenshots_6.PNG" style="width: 24%; border-radius: 10px; flex-shrink: 0;" />
+    <img src="assets/screenshots_7.PNG" style="width: 24%; border-radius: 10px; flex-shrink: 0;" />
+    <img src="assets/screenshots_8.PNG" style="width: 24%; border-radius: 10px; flex-shrink: 0;" />
 </div>
+
+<p align="center" style="color: #999; font-size: 14px;">滑动查看更多预览</p>
 
 </div>
 
 ## ✨ 核心特性
 
-- **阅读体验**：自定义排版、字体与主题，支持沉浸式阅读与阅读时长统计。
-- **流畅性能**：通过 Rust FFI 优化核心逻辑，快速加载。
-- **界面设计**：采用 Material Design 3 设计语言，支持动态色彩提取。
-- **内容丰富**：集成多维度榜单、搜索与详细的书籍元数据。
-- **智能防护**：内置请求队列与自动限流机制，保障服务稳定性。
+- **阅读体验**：支持字号调节、简繁转换与段落间距调整。提供多种预设纯色背景及自定义背景色。
+- **界面设计**：适配 Material Design 3，支持从封面提取动态主题色，提供浅色/深色/纯黑模式。
+- **云端同步**：支持 GitHub Gist 同步，阅读时长、书籍标记、多端进度互通。
+- **内容发现**：集成多维度榜单，支持按等级/标签筛选或屏蔽内容。
 
 ## 🛠️ 技术栈
 
-- **UI 框架**: Flutter (Riverpod 状态管理)
+- **UI 框架**: Flutter (Riverpod)
 - **底层核心**: Rust (通过 `flutter_rust_bridge` 调用)
 - **通信协议**: SignalR + MessagePack (二进制通讯)
 - **字体引擎**: 基于 Rust 的 WOFF2 动态转码与解混淆
 
-## 🚀 快速开始
+## 📬 反馈与交流
 
-### 环境需​​求
-- Flutter 3.7.2+
-- Rust Stable
-- Windows / macOS / Linux / Android / iOS
-
-### 构建运行
-
-```bash
-# 1. 克隆项目
-git clone https://github.com/LiuHaoUltra/Novella.git
-
-# 2. 生成 FFI 绑定
-flutter_rust_bridge_codegen generate
-
-# 3. 运行
-flutter run
-```
+- 💡 **哇，新点子！** [前往 Discussions 讨论](https://github.com/LiuHaoUltra/Novella/discussions/7)
+- 🐛 **发现问题？** [提交 Issue 反馈](https://github.com/LiuHaoUltra/Novella/issues/new?labels=bug)
 
 ## 🙏 致谢
 
@@ -63,4 +55,3 @@ flutter run
 ## ⚠️ 免责声明
 
 本项目仅供学习交流使用，严禁用于商业用途。
-
