@@ -1072,7 +1072,8 @@ class BookDetailPageState extends ConsumerState<BookDetailPage> {
   Widget build(BuildContext context) {
     // Check OLED black mode setting
     final settings = ref.watch(settingsProvider);
-    final isOled = settings.oledBlack;
+    final isOled =
+        settings.oledBlack && Theme.of(context).brightness == Brightness.dark;
 
     // Use dynamic ColorScheme if available AND not in OLED mode
     // OLED mode uses system default colors for pure black experience
@@ -1165,7 +1166,8 @@ class BookDetailPageState extends ConsumerState<BookDetailPage> {
 
   Widget _buildLoadingPreview(ColorScheme colorScheme) {
     final settings = ref.watch(settingsProvider);
-    final isOled = settings.oledBlack;
+    final isOled =
+        settings.oledBlack && Theme.of(context).brightness == Brightness.dark;
     final coverUrl = widget.initialCoverUrl ?? '';
     final title = widget.initialTitle ?? '';
 
@@ -1380,7 +1382,8 @@ class BookDetailPageState extends ConsumerState<BookDetailPage> {
 
   Widget _buildContent(ColorScheme colorScheme) {
     final settings = ref.watch(settingsProvider);
-    final isOled = settings.oledBlack;
+    final isOled =
+        settings.oledBlack && Theme.of(context).brightness == Brightness.dark;
     final book = _bookInfo!;
     // 复用封面 URL 利用缓存
     final coverUrl =
