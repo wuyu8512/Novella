@@ -32,7 +32,9 @@ class SettingsPage extends ConsumerWidget {
                     padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
                     child: SizedBox(
                       height:
-                          40, // Slightly reduced to fine-tune visual alignment
+                          48.0 +
+                          Theme.of(context).visualDensity.vertical *
+                              4.0, // Adaptive height: 48px (Mobile) / 40px (Desktop)
                       child: Row(
                         children: [
                           Text(
