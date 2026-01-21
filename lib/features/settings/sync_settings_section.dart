@@ -6,7 +6,7 @@ import 'package:novella/core/sync/sync_crypto.dart';
 import 'package:novella/core/sync/sync_manager.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-/// 云同步设置区域
+/// 增强同步设置区域
 class SyncSettingsSection extends StatefulWidget {
   const SyncSettingsSection({super.key});
 
@@ -45,7 +45,7 @@ class _SyncSettingsSectionState extends State<SyncSettingsSection> {
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
           child: Text(
-            '云同步',
+            '增强同步',
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.bold,

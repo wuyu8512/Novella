@@ -199,8 +199,8 @@ class _MyAppState extends ConsumerState<MyApp> {
         if (settings.oledBlack) {
           darkScheme = darkScheme.copyWith(
             surface: Colors.black,
-            surfaceContainer: Colors.black,
-            surfaceContainerHigh: const Color(0xFF121212),
+            surfaceContainer: const Color(0xFF121212),
+            surfaceContainerHigh: const Color(0xFF1E1E1E),
           );
         }
 
