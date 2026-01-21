@@ -1,4 +1,4 @@
-# 📓 Novella
+# 📚 Novella
 
 ![Flutter](https://img.shields.io/badge/Flutter-02569B?logo=flutter&logoColor=white)
 ![Rust](https://img.shields.io/badge/Rust-000000?logo=rust&logoColor=white)
@@ -10,16 +10,20 @@
 
 <br/>
 
-<p align="center">
-  <img src="assets/screenshots_1.PNG" width="24%" />
-  <img src="assets/screenshots_2.PNG" width="24%" />
-  <img src="assets/screenshots_3.PNG" width="24%" />
-  <img src="assets/screenshots_4.PNG" width="24%" />
-  <br/> <img src="assets/screenshots_5.PNG" width="24%" />
-  <img src="assets/screenshots_6.PNG" width="24%" />
-  <img src="assets/screenshots_7.PNG" width="24%" />
-  <img src="assets/screenshots_8.PNG" width="24%" />
-</p>
+<table align="center">
+    <tr>
+        <td width="25%"><img src="assets/screenshots_1.PNG" width="100%"></td>
+        <td width="25%"><img src="assets/screenshots_2.PNG" width="100%"></td>
+        <td width="25%"><img src="assets/screenshots_3.PNG" width="100%"></td>
+        <td width="25%"><img src="assets/screenshots_4.PNG" width="100%"></td>
+    </tr>
+    <tr>
+        <td width="25%"><img src="assets/screenshots_5.PNG" width="100%"></td>
+        <td width="25%"><img src="assets/screenshots_6.PNG" width="100%"></td>
+        <td width="25%"><img src="assets/screenshots_7.PNG" width="100%"></td>
+        <td width="25%"><img src="assets/screenshots_8.PNG" width="100%"></td>
+    </tr>
+</table>
 
 ## ✨ 核心特性
 
