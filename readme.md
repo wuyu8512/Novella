@@ -1,6 +1,4 @@
-<h1 align="center">Novella</h1>
-
-<div align="center">
+# 📓 Novella
 
 ![Flutter](https://img.shields.io/badge/Flutter-02569B?logo=flutter&logoColor=white)
 ![Rust](https://img.shields.io/badge/Rust-000000?logo=rust&logoColor=white)
@@ -8,10 +6,7 @@
 
 **轻书架第三方客户端**
 
-<p align="center">
-  基于 Flutter + Rust FFI 构建，提供纯净的界面和阅读体验。<br/>
-  如果喜欢这款软件，还请点亮仓库的小星星~
-</p>
+基于 Flutter + Rust FFI 构建，提供纯净的界面和阅读体验。
 
 <br/>
 
@@ -25,8 +20,6 @@
   <img src="assets/screenshots_7.PNG" width="24%" />
   <img src="assets/screenshots_8.PNG" width="24%" />
 </p>
-
-</div>
 
 ## ✨ 核心特性
 
