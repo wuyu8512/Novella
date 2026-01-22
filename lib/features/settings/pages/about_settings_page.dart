@@ -8,6 +8,7 @@ import 'package:novella/features/settings/source_code_page.dart';
 import 'package:novella/features/settings/log_viewer_page.dart';
 import 'package:novella/features/auth/login_page.dart';
 import 'package:novella/core/sync/sync_manager.dart';
+import 'package:novella/core/services/update_service.dart';
 
 import 'package:novella/features/settings/widgets/settings_header_card.dart';
 
@@ -36,6 +37,18 @@ class AboutSettingsPage extends ConsumerWidget {
                 leading: const Icon(Icons.info_outline),
                 title: const Text('版本'),
                 subtitle: Text(settings.version),
+                onTap:
+                    () => UpdateService.checkUpdate(context, ref, manual: true),
+              ),
+
+              SwitchListTile(
+                secondary: const Icon(Icons.update),
+                title: const Text('检测更新'),
+                subtitle: const Text('启动时检查 GitHub 最新版本'),
+                value: settings.autoCheckUpdate,
+                onChanged: (value) {
+                  ref.read(settingsProvider.notifier).setAutoCheckUpdate(value);
+                },
               ),
 
               ListTile(

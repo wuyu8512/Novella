@@ -41,6 +41,8 @@ class AppSettings {
   // iOS 显示样式（仅 iOS 平台有效）
   // 'md3' = Material Design 3（默认）, 'ios18' = iOS 18, 'ios26' = iOS 26 液态玻璃
   final String iosDisplayStyle;
+  final bool autoCheckUpdate;
+  final String ignoredUpdateVersion; // 忽略的更新版本号
 
   static const defaultModuleOrder = ['stats', 'ranking', 'recentlyUpdated'];
   static const defaultEnabledModules = ['stats', 'ranking', 'recentlyUpdated'];
@@ -82,6 +84,8 @@ class AppSettings {
     this.readerPresetIndex = 0, // 默认第一个预设（白纸）
     this.readerUseCustomColor = false, // 默认使用预设
     this.iosDisplayStyle = 'md3', // 默认使用 MD3 样式
+    this.autoCheckUpdate = false, // 默认关闭自动检查
+    this.ignoredUpdateVersion = '',
   });
 
   /// 是否使用 iOS 26 液态玻璃样式
@@ -120,6 +124,8 @@ class AppSettings {
     int? readerPresetIndex,
     bool? readerUseCustomColor,
     String? iosDisplayStyle,
+    bool? autoCheckUpdate,
+    String? ignoredUpdateVersion,
   }) {
     return AppSettings(
       fontSize: fontSize ?? this.fontSize,
@@ -155,6 +161,8 @@ class AppSettings {
       readerPresetIndex: readerPresetIndex ?? this.readerPresetIndex,
       readerUseCustomColor: readerUseCustomColor ?? this.readerUseCustomColor,
       iosDisplayStyle: iosDisplayStyle ?? this.iosDisplayStyle,
+      autoCheckUpdate: autoCheckUpdate ?? this.autoCheckUpdate,
+      ignoredUpdateVersion: ignoredUpdateVersion ?? this.ignoredUpdateVersion,
     );
   }
 
@@ -232,6 +240,9 @@ class SettingsNotifier extends Notifier<AppSettings> {
       readerUseCustomColor:
           prefs.getBool('setting_readerUseCustomColor') ?? false,
       iosDisplayStyle: prefs.getString('setting_iosDisplayStyle') ?? 'md3',
+      autoCheckUpdate: prefs.getBool('setting_autoCheckUpdate') ?? false,
+      ignoredUpdateVersion:
+          prefs.getString('setting_ignoredUpdateVersion') ?? '',
     );
 
     // 同步 iOS 显示样式到 PlatformInfo
@@ -294,6 +305,11 @@ class SettingsNotifier extends Notifier<AppSettings> {
       state.readerUseCustomColor,
     );
     await prefs.setString('setting_iosDisplayStyle', state.iosDisplayStyle);
+    await prefs.setBool('setting_autoCheckUpdate', state.autoCheckUpdate);
+    await prefs.setString(
+      'setting_ignoredUpdateVersion',
+      state.ignoredUpdateVersion,
+    );
   }
 
   void setFontSize(double size) {
@@ -489,6 +505,16 @@ class SettingsNotifier extends Notifier<AppSettings> {
     if (Platform.isIOS) {
       PlatformInfo.styleOverride = value;
     }
+  }
+
+  void setAutoCheckUpdate(bool value) {
+    state = state.copyWith(autoCheckUpdate: value);
+    _save();
+  }
+
+  void setIgnoredUpdateVersion(String version) {
+    state = state.copyWith(ignoredUpdateVersion: version);
+    _save();
   }
 }
 

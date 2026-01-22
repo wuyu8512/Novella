@@ -3,7 +3,7 @@ class TimeUtils {
   /// [dateTime] 输入时间
   static String formatRelativeTime(DateTime dateTime) {
     // 确保使用 UTC 进行计算，或者都转为 Local
-    // 这里建议转为 Local 进行比较
+    // 这里转为 Local 进行比较
     final now = DateTime.now();
     final date = dateTime.toLocal();
     final diff = now.difference(date);

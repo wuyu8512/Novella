@@ -5,6 +5,7 @@ import 'package:novella/features/home/home_page.dart';
 import 'package:novella/features/history/history_page.dart';
 import 'package:novella/features/settings/settings_page.dart';
 import 'package:novella/features/shelf/shelf_page.dart';
+import 'package:novella/core/services/update_service.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -26,6 +27,17 @@ class _MainPageState extends ConsumerState<MainPage> {
     HistoryPage(key: _historyKey),
     const SettingsPage(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    // 自动检查更新
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        UpdateService.checkUpdate(context, ref, manual: false);
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
