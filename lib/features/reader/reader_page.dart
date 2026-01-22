@@ -849,14 +849,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
           child: Row(
             children: [
               // 返回按钮 - AdaptiveFloatingActionButton
-              // 返回按钮
               if (settings.useIOS26Style)
                 SizedBox(
-                  width: 38,
-                  height: 38,
+                  width: 44,
+                  height: 44,
                   child: AdaptiveButton.sfSymbol(
                     onPressed: () => Navigator.pop(context),
-                    sfSymbol: const SFSymbol('chevron.left', size: 17),
+                    sfSymbol: const SFSymbol('chevron.left', size: 24),
                     style: AdaptiveButtonStyle.glass,
                     borderRadius: BorderRadius.circular(1000),
                     useSmoothRectangleBorder: false,
@@ -1104,11 +1103,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 // 上一章
                 if (settings.useIOS26Style)
                   SizedBox(
-                    width: 38,
-                    height: 38,
+                    width: 44,
+                    height: 44,
                     child: AdaptiveButton.sfSymbol(
                       onPressed: _targetSortNum > 1 ? _onPrev : null,
-                      sfSymbol: const SFSymbol('chevron.left', size: 17),
+                      sfSymbol: const SFSymbol('chevron.left', size: 24),
                       style: AdaptiveButtonStyle.glass,
                       borderRadius: BorderRadius.circular(1000),
                       useSmoothRectangleBorder: false,
@@ -1145,14 +1144,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
                 // 下一章
                 if (settings.useIOS26Style)
                   SizedBox(
-                    width: 38,
-                    height: 38,
+                    width: 44,
+                    height: 44,
                     child: AdaptiveButton.sfSymbol(
                       onPressed:
                           _targetSortNum < widget.totalChapters
                               ? _onNext
                               : null,
-                      sfSymbol: const SFSymbol('chevron.right', size: 17),
+                      sfSymbol: const SFSymbol('chevron.right', size: 24),
                       style: AdaptiveButtonStyle.glass,
                       borderRadius: BorderRadius.circular(1000),
                       useSmoothRectangleBorder: false,
