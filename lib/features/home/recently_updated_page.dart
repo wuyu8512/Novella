@@ -7,6 +7,7 @@ import 'package:novella/data/services/book_service.dart';
 import 'package:novella/features/book/book_detail_page.dart';
 import 'package:novella/features/settings/settings_page.dart';
 import 'package:novella/src/widgets/book_type_badge.dart';
+import 'package:novella/src/widgets/book_cover_previewer.dart';
 
 class RecentlyUpdatedPage extends ConsumerStatefulWidget {
   const RecentlyUpdatedPage({super.key});
@@ -212,31 +213,34 @@ class _RecentlyUpdatedPageState extends ConsumerState<RecentlyUpdatedPage> {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: CachedNetworkImage(
-                      imageUrl: book.cover,
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                      height: double.infinity,
-                      placeholder:
-                          (context, url) => Container(
-                            color: colorScheme.surfaceContainerHighest,
-                            child: Center(
-                              child: Icon(
-                                Icons.book_outlined,
-                                color: colorScheme.onSurfaceVariant,
+                    child: BookCoverPreviewer(
+                      coverUrl: book.cover,
+                      child: CachedNetworkImage(
+                        imageUrl: book.cover,
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        height: double.infinity,
+                        placeholder:
+                            (context, url) => Container(
+                              color: colorScheme.surfaceContainerHighest,
+                              child: Center(
+                                child: Icon(
+                                  Icons.book_outlined,
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
                               ),
                             ),
-                          ),
-                      errorWidget:
-                          (context, url, error) => Container(
-                            color: colorScheme.surfaceContainerHighest,
-                            child: Center(
-                              child: Icon(
-                                Icons.broken_image_outlined,
-                                color: colorScheme.onSurfaceVariant,
+                        errorWidget:
+                            (context, url, error) => Container(
+                              color: colorScheme.surfaceContainerHighest,
+                              child: Center(
+                                child: Icon(
+                                  Icons.broken_image_outlined,
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
                               ),
                             ),
-                          ),
+                      ),
                     ),
                   ),
                   // 书籍类型角标（Hero 内部）

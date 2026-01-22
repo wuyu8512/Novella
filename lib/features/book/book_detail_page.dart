@@ -14,6 +14,7 @@ import 'package:novella/features/settings/settings_page.dart';
 import 'package:novella/data/models/comment.dart';
 import 'package:novella/features/comment/comment_page.dart';
 import 'package:palette_generator/palette_generator.dart';
+import 'package:novella/src/widgets/book_cover_previewer.dart';
 
 /// 骨架屏加载效果组件
 class ShimmerBox extends StatefulWidget {
@@ -430,7 +431,7 @@ class BookDetailPageState extends ConsumerState<BookDetailPage> {
       // 提取封面颜色
       final paletteGenerator = await PaletteGenerator.fromImageProvider(
         CachedNetworkImageProvider(coverUrl),
-        size: const Size(50, 70), // Match cover aspect ratio (5:7)
+        size: const Size(50, 75), // Match cover aspect ratio (2:3)
         maximumColorCount: 3, // Optimal color count for palette
       );
 
@@ -1241,7 +1242,7 @@ class BookDetailPageState extends ConsumerState<BookDetailPage> {
                         tag: widget.heroTag ?? 'cover_${widget.bookId}',
                         child: Container(
                           width: 100,
-                          height: 140,
+                          height: 150,
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(8),
                             boxShadow: [
@@ -1256,26 +1257,30 @@ class BookDetailPageState extends ConsumerState<BookDetailPage> {
                             borderRadius: BorderRadius.circular(8),
                             child:
                                 coverUrl.isNotEmpty
-                                    ? CachedNetworkImage(
-                                      imageUrl: coverUrl,
-                                      fit: BoxFit.cover,
-                                      placeholder:
-                                          (_, __) => Container(
-                                            color:
-                                                colorScheme
-                                                    .surfaceContainerHighest,
-                                          ),
-                                      errorWidget:
-                                          (_, __, ___) => Container(
-                                            color: const Color(0xFF3A3A3A),
-                                            child: const Center(
-                                              child: Icon(
-                                                Icons.menu_book_rounded,
-                                                size: 40,
-                                                color: Color(0xFF888888),
+                                    ? BookCoverPreviewer(
+                                      borderRadius: 8.0,
+                                      coverUrl: coverUrl,
+                                      child: CachedNetworkImage(
+                                        imageUrl: coverUrl,
+                                        fit: BoxFit.cover,
+                                        placeholder:
+                                            (_, __) => Container(
+                                              color:
+                                                  colorScheme
+                                                      .surfaceContainerHighest,
+                                            ),
+                                        errorWidget:
+                                            (_, __, ___) => Container(
+                                              color: const Color(0xFF3A3A3A),
+                                              child: const Center(
+                                                child: Icon(
+                                                  Icons.menu_book_rounded,
+                                                  size: 40,
+                                                  color: Color(0xFF888888),
+                                                ),
                                               ),
                                             ),
-                                          ),
+                                      ),
                                     )
                                     : Container(
                                       color:
@@ -1403,6 +1408,8 @@ class BookDetailPageState extends ConsumerState<BookDetailPage> {
           elevation: 0,
           scrolledUnderElevation: 0,
           backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+          // 调整右侧按钮边距以匹配左侧返回按钮视觉位置
+          actionsPadding: const EdgeInsets.only(right: 12),
           flexibleSpace: FlexibleSpaceBar(
             collapseMode: CollapseMode.parallax,
             background: Stack(
@@ -1501,7 +1508,7 @@ class BookDetailPageState extends ConsumerState<BookDetailPage> {
                         tag: widget.heroTag ?? 'cover_${book.id}',
                         child: Container(
                           width: 100,
-                          height: 140,
+                          height: 150,
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(8),
                             boxShadow: [
@@ -1526,26 +1533,30 @@ class BookDetailPageState extends ConsumerState<BookDetailPage> {
                                         ),
                                       ),
                                     )
-                                    : CachedNetworkImage(
-                                      imageUrl: coverUrl,
-                                      fit: BoxFit.cover,
-                                      placeholder:
-                                          (_, __) => Container(
-                                            color:
-                                                colorScheme
-                                                    .surfaceContainerHighest,
-                                          ),
-                                      errorWidget:
-                                          (_, __, ___) => Container(
-                                            color: const Color(0xFF3A3A3A),
-                                            child: const Center(
-                                              child: Icon(
-                                                Icons.menu_book_rounded,
-                                                size: 40,
-                                                color: Color(0xFF888888),
+                                    : BookCoverPreviewer(
+                                      borderRadius: 8.0,
+                                      coverUrl: coverUrl,
+                                      child: CachedNetworkImage(
+                                        imageUrl: coverUrl,
+                                        fit: BoxFit.cover,
+                                        placeholder:
+                                            (_, __) => Container(
+                                              color:
+                                                  colorScheme
+                                                      .surfaceContainerHighest,
+                                            ),
+                                        errorWidget:
+                                            (_, __, ___) => Container(
+                                              color: const Color(0xFF3A3A3A),
+                                              child: const Center(
+                                                child: Icon(
+                                                  Icons.menu_book_rounded,
+                                                  size: 40,
+                                                  color: Color(0xFF888888),
+                                                ),
                                               ),
                                             ),
-                                          ),
+                                      ),
                                     ),
                           ),
                         ),

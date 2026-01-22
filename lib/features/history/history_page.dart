@@ -8,6 +8,7 @@ import 'package:novella/data/services/user_service.dart';
 import 'package:novella/features/book/book_detail_page.dart';
 import 'package:novella/features/settings/settings_page.dart';
 import 'package:novella/src/widgets/book_type_badge.dart';
+import 'package:novella/src/widgets/book_cover_previewer.dart';
 
 class HistoryPage extends ConsumerStatefulWidget {
   const HistoryPage({super.key});
@@ -349,31 +350,36 @@ class HistoryPageState extends ConsumerState<HistoryPage>
                     ),
                     child:
                         book.cover.isNotEmpty
-                            ? CachedNetworkImage(
-                              imageUrl: book.cover,
-                              fit: BoxFit.cover,
-                              width: double.infinity,
-                              height: double.infinity,
-                              placeholder:
-                                  (_, __) => Container(
-                                    color: colorScheme.surfaceContainerHighest,
-                                    child: Center(
-                                      child: Icon(
-                                        Icons.book_outlined,
-                                        color: colorScheme.onSurfaceVariant,
+                            ? BookCoverPreviewer(
+                              coverUrl: book.cover,
+                              child: CachedNetworkImage(
+                                imageUrl: book.cover,
+                                fit: BoxFit.cover,
+                                width: double.infinity,
+                                height: double.infinity,
+                                placeholder:
+                                    (_, __) => Container(
+                                      color:
+                                          colorScheme.surfaceContainerHighest,
+                                      child: Center(
+                                        child: Icon(
+                                          Icons.book_outlined,
+                                          color: colorScheme.onSurfaceVariant,
+                                        ),
                                       ),
                                     ),
-                                  ),
-                              errorWidget:
-                                  (_, __, ___) => Container(
-                                    color: colorScheme.surfaceContainerHighest,
-                                    child: Center(
-                                      child: Icon(
-                                        Icons.broken_image_outlined,
-                                        color: colorScheme.onSurfaceVariant,
+                                errorWidget:
+                                    (_, __, ___) => Container(
+                                      color:
+                                          colorScheme.surfaceContainerHighest,
+                                      child: Center(
+                                        child: Icon(
+                                          Icons.broken_image_outlined,
+                                          color: colorScheme.onSurfaceVariant,
+                                        ),
                                       ),
                                     ),
-                                  ),
+                              ),
                             )
                             : Container(
                               color: colorScheme.surfaceContainerHighest,

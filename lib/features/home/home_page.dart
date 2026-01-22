@@ -11,6 +11,7 @@ import 'package:novella/features/ranking/ranking_page.dart';
 import 'package:novella/features/search/search_page.dart';
 import 'package:novella/features/settings/settings_page.dart';
 import 'package:novella/src/widgets/book_type_badge.dart';
+import 'package:novella/src/widgets/book_cover_previewer.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
@@ -643,31 +644,34 @@ class _HomePageState extends ConsumerState<HomePage> with RouteAware {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: CachedNetworkImage(
-                      imageUrl: book.cover,
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                      height: double.infinity,
-                      placeholder:
-                          (context, url) => Container(
-                            color: colorScheme.surfaceContainerHighest,
-                            child: Center(
-                              child: Icon(
-                                Icons.book_outlined,
-                                color: colorScheme.onSurfaceVariant,
+                    child: BookCoverPreviewer(
+                      coverUrl: book.cover,
+                      child: CachedNetworkImage(
+                        imageUrl: book.cover,
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        height: double.infinity,
+                        placeholder:
+                            (context, url) => Container(
+                              color: colorScheme.surfaceContainerHighest,
+                              child: Center(
+                                child: Icon(
+                                  Icons.book_outlined,
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
                               ),
                             ),
-                          ),
-                      errorWidget:
-                          (context, url, error) => Container(
-                            color: colorScheme.surfaceContainerHighest,
-                            child: Center(
-                              child: Icon(
-                                Icons.broken_image_outlined,
-                                color: colorScheme.onSurfaceVariant,
+                        errorWidget:
+                            (context, url, error) => Container(
+                              color: colorScheme.surfaceContainerHighest,
+                              child: Center(
+                                child: Icon(
+                                  Icons.broken_image_outlined,
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
                               ),
                             ),
-                          ),
+                      ),
                     ),
                   ),
                   // 前三名排行角标（Hero 内部）
