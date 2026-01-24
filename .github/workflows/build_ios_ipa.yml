@@ -19,69 +19,49 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          lfs: true
 
-      # 0. 选择 Xcode 26 (支持 iOS 26 SDK 的 Liquid Glass API)
+      # 指定 Xcode 26
       - name: Select Xcode 26
         run: sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
 
-      # 1. 配置 Rust 环境
-      - name: Install Rust Toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-apple-ios
-
-      # 2. 配置 Flutter
+      # 1. 配置 Flutter
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: 'master'
           cache: true
 
-      # 3. 编译 Rust 并放入指定目录
-      - name: Build and Place Rust Lib
-        run: |
-          echo "🛠️ Compiling Rust for iOS..."
-          cd rust
-          cargo build --release --target aarch64-apple-ios
-          cd ..
-          
-          echo "📂 Moving lib to ios/libs..."
-          mkdir -p ios/libs
-          cp rust/target/aarch64-apple-ios/release/libnovella_native.a ios/libs/
-          
-          echo "✅ Rust lib placed successfully!"
-
       # 4. 获取依赖
       - name: Flutter Pub Get
         run: flutter pub get
 
-      # [新增步骤] 5. 显式安装 Pods
-      # 必须先生成 Pods 项目，我们才能在下一步修改它的签名配置
+      # 安装 Pods 生成项目文件
       - name: Install CocoaPods Dependencies
         run: |
           cd ios
           pod install
           cd ..
 
-      # [关键修复] 6. 全局暴力移除签名配置 (Runner + Pods)
-      # 这是解决 "PhaseScriptExecution failed" 的关键
+      # 移除所有签名配置
       - name: Nuke Code Signing
         run: |
           echo "☢️ Nuking code signing configurations..."
           
-          # --- 1. 处理 Runner 项目 ---
+          # 处理 Runner 项目
           echo "   -> Patching Runner.xcodeproj..."
           sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' ios/Runner.xcodeproj/project.pbxproj
           sed -i '' 's/"CODE_SIGN_IDENTITY\[sdk=iphoneos\*\]" = "iPhone Developer";/"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";/g' ios/Runner.xcodeproj/project.pbxproj
           
-          # --- 2. 处理 Pods 项目 (这是之前漏掉的!) ---
+          # 处理 Pods 项目
           echo "   -> Patching Pods.xcodeproj..."
           # 将 Pods 项目中的所有签名要求强制改为 Manual 和 空
           sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' ios/Pods/Pods.xcodeproj/project.pbxproj
           sed -i '' 's/CODE_SIGN_IDENTITY = "iPhone Developer";/CODE_SIGN_IDENTITY = "";/g' ios/Pods/Pods.xcodeproj/project.pbxproj
           sed -i '' 's/"CODE_SIGN_IDENTITY\[sdk=iphoneos\*\]" = "iPhone Developer";/"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";/g' ios/Pods/Pods.xcodeproj/project.pbxproj
 
-          # --- 3. 处理 xcconfig (双重保险) ---
+          # 处理 xcconfig
           echo "   -> Patching Release.xcconfig..."
           echo "CODE_SIGNING_ALLOWED = NO" >> ios/Flutter/Release.xcconfig
           echo "CODE_SIGNING_REQUIRED = NO" >> ios/Flutter/Release.xcconfig
@@ -90,18 +70,18 @@ jobs:
           
           echo "✅ Code signing configurations nuked for EVERYTHING."
 
-      # 7. 构建免签 Release 包 (保持 --verbose 以便排查，如果成功可去掉)
+      # 构建免签 Release
       - name: Build iOS Release (No Codesign)
         run: flutter build ios --release --no-codesign --verbose
 
-      # 8. 打包成 IPA
+      # 打包 IPA
       - name: Package IPA
         run: |
           mkdir Payload
           mv build/ios/iphoneos/Runner.app Payload
           zip -r novella.ipa Payload
 
-      # 9. 上传产物
+      # 上传产物
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
