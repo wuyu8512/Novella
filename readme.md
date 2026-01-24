@@ -44,10 +44,30 @@
 - 💡 **哇，新点子！** [前往 Discussions 讨论](https://github.com/LiuHaoUltra/Novella/discussions/7)
 - 🐛 **发现问题？** [提交 Issue 反馈](https://github.com/LiuHaoUltra/Novella/issues/new?labels=bug)
 
+## 🚀 快速开始
+
+### 环境需求
+- Flutter 3.7.2+
+- Rust Stable（可选，仓库已包含预编译文件）
+
+### 构建运行
+
+```bash
+# 1. 安装 Git LFS
+git lfs install
+
+# 2. 克隆项目
+git clone https://github.com/LiuHaoUltra/Novella.git
+
+# 3. 运行
+flutter run
+```
+
 ## 🙏 致谢
 
-本项目参考了 [LightNovelShelf Web](https://github.com/LightNovelShelf/Web) 的实现与数据结构，特此感谢。
+- 本项目参考了 [LightNovelShelf Web](https://github.com/LightNovelShelf/Web) 的实现与数据结构，特此感谢。
+- 于此处前往 [轻书架](https://www.lightnovel.app) 站点。
 
 ## ⚠️ 免责声明
 
-本项目仅供学习交流使用，严禁用于商业用途。
+- 本项目仅供学习交流使用，严禁用于商业用途。
