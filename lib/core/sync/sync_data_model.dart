@@ -7,12 +7,14 @@ class SyncData {
   final int schemaVersion;
   final String appVersion;
   final DateTime syncedAt;
+  final String? syncId; // 逻辑版本号，用于辅助冲突检测
   final Map<String, SyncModule> modules;
 
   SyncData({
     required this.schemaVersion,
     required this.appVersion,
     required this.syncedAt,
+    this.syncId,
     required this.modules,
   });
 
@@ -24,6 +26,7 @@ class SyncData {
       schemaVersion: currentSchemaVersion,
       appVersion: appVersion,
       syncedAt: DateTime.now(),
+      syncId: DateTime.now().millisecondsSinceEpoch.toString(), // 简单作为版本标识
       modules: modules,
     );
   }
@@ -44,6 +47,7 @@ class SyncData {
       syncedAt:
           DateTime.tryParse(json['syncedAt'] as String? ?? '') ??
           DateTime.now(),
+      syncId: json['syncId'] as String?,
       modules: modules,
     );
   }
@@ -53,6 +57,7 @@ class SyncData {
       'schemaVersion': schemaVersion,
       'appVersion': appVersion,
       'syncedAt': syncedAt.toIso8601String(),
+      'syncId': syncId,
       'modules': modules.map((key, value) => MapEntry(key, value.toJson())),
     };
   }
@@ -83,6 +88,7 @@ class SyncData {
       schemaVersion: currentSchemaVersion,
       appVersion: appVersion,
       syncedAt: DateTime.now(),
+      syncId: DateTime.now().millisecondsSinceEpoch.toString(),
       modules: mergedModules,
     );
   }

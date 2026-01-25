@@ -41,6 +41,7 @@ class SyncManager with ChangeNotifier, WidgetsBindingObserver {
   static const _keyGistId = 'sync_gist_id';
   static const _keySyncPassword = 'sync_password';
   static const _keyLastSyncTime = 'last_sync_time';
+  static const _keyLastSyncId = 'last_sync_id';
 
   SyncStatus _status = SyncStatus.disconnected;
   DateTime? _lastSyncTime;
@@ -50,6 +51,7 @@ class SyncManager with ChangeNotifier, WidgetsBindingObserver {
   // 缓存 Key (避免重复计算)
   Uint8List? _cachedKey;
   Uint8List? _cachedSalt;
+  String? _lastKnownSyncId;
 
   // 20s 防抖
   Timer? _syncDebounceTimer;
@@ -93,6 +95,7 @@ class SyncManager with ChangeNotifier, WidgetsBindingObserver {
     final gistId = await _storage.read(key: _keyGistId);
     final prefs = await SharedPreferences.getInstance();
     final lastSyncStr = prefs.getString(_keyLastSyncTime);
+    _lastKnownSyncId = prefs.getString(_keyLastSyncId);
 
     if (token != null) {
       _gistService.setAccessToken(token, gistId: gistId);
@@ -108,8 +111,8 @@ class SyncManager with ChangeNotifier, WidgetsBindingObserver {
       // 预热密钥 (可选，如果能读取到密码)
       final password = await getSyncPassword();
       if (password != null) {
-        // 注意：这里没有 salt，因为 salt 存储在 Gist 的加密文件中
-        // 我们不能凭空生成 key。必须等到第一次下载文件或上传文件时才能确定 key。
+        // 注：这里没有 salt，因为 salt 存储在 Gist 的加密文件中
+        // 不能凭空生成 key。必须等到第一次下载文件或上传文件时才能确定 key。
       }
     } else {
       _status = SyncStatus.disconnected;
@@ -260,9 +263,7 @@ class SyncManager with ChangeNotifier, WidgetsBindingObserver {
       final localData = await _collectLocalData();
 
       // 2. 下载远程
-      final downloadResult = await _gistService.downloadFromGist();
-      final remoteEncrypted = downloadResult?['content'];
-      final etag = downloadResult?['etag'];
+      final remoteEncrypted = await _gistService.downloadFromGist();
       SyncData? remoteData;
 
       // 解密 & 缓存 Key
@@ -313,7 +314,19 @@ class SyncManager with ChangeNotifier, WidgetsBindingObserver {
         }
       }
 
-      // 3. 合并
+      // 3. 合并与冲突检测
+      if (remoteData != null && _lastKnownSyncId != null) {
+        if (remoteData.syncId != _lastKnownSyncId) {
+          _logger.warning(
+            'Sync conflict detected! Remote SyncID (${remoteData.syncId}) '
+            'does not match last known ($_lastKnownSyncId). '
+            'Merging data instead of simple overwrite.',
+          );
+        } else {
+          _logger.info('No conflict detected, SyncID matches.');
+        }
+      }
+
       final mergedData =
           remoteData != null ? localData.mergeWith(remoteData) : localData;
 
@@ -327,21 +340,28 @@ class SyncManager with ChangeNotifier, WidgetsBindingObserver {
         _cachedKey!,
         _cachedSalt!,
       );
-      await _gistService.uploadToGist(encrypted, expectedEtag: etag);
+
+      // 尝试上传
+      await _gistService.uploadToGist(encrypted);
+
+      // 上传成功后更新持久化存储中的凭据
+      final currentGistId = _gistService.gistId;
+      if (currentGistId != null) {
+        await _storage.write(key: _keyGistId, value: currentGistId);
+      }
 
       // 5. 应用合并后的数据 (Update Local)
       // 关键修正：必须应用 mergedData，否则本地的新更改会被远程旧数据覆盖
       await _applyRemoteData(mergedData);
 
-      // 6. 保存 ID
-      if (_gistService.gistId != null) {
-        await _storage.write(key: _keyGistId, value: _gistService.gistId);
-      }
-
       // 7. 更新时间
       _lastSyncTime = DateTime.now();
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_keyLastSyncTime, _lastSyncTime!.toIso8601String());
+      if (mergedData.syncId != null) {
+        _lastKnownSyncId = mergedData.syncId;
+        await prefs.setString(_keyLastSyncId, _lastKnownSyncId!);
+      }
 
       _status = SyncStatus.idle;
       _retryCount = 0; // 成功后重置重试计数
@@ -415,8 +435,7 @@ class SyncManager with ChangeNotifier, WidgetsBindingObserver {
     _status = SyncStatus.syncing;
 
     try {
-      final downloadResult = await _gistService.downloadFromGist();
-      final remoteEncrypted = downloadResult?['content'];
+      final remoteEncrypted = await _gistService.downloadFromGist();
       if (remoteEncrypted == null) {
         _status = SyncStatus.idle;
         return false;
@@ -449,12 +468,21 @@ class SyncManager with ChangeNotifier, WidgetsBindingObserver {
       });
       _cachedSalt = salt;
 
+      // 更新同步 ID
+      if (remoteData.syncId != null) {
+        _lastKnownSyncId = remoteData.syncId;
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_keyLastSyncId, _lastKnownSyncId!);
+      }
+
       _status = SyncStatus.idle;
       _logger.info('Restore from Gist completed');
       return true;
     } catch (e) {
+      _logger.severe('Gist sync failed: $e');
       _status = SyncStatus.error;
       _errorMessage = e.toString();
+      notifyListeners();
       rethrow;
     } finally {
       _isSyncing = false;

@@ -173,16 +173,8 @@ class GistSyncService {
   // Gist CRUD
   // ============================================================
 
-  /// Gist 下载响应（含 ETag 冲突检测）
-  /// [content] 加密字符串
-  /// [etag] 用于更新时的冲突检测
-  static const String _emptyEtag = '';
-
   /// 上传 (Create/Update)
-  Future<void> uploadToGist(
-    String encryptedJsonContent, {
-    String? expectedEtag,
-  }) async {
+  Future<void> uploadToGist(String encryptedJsonContent) async {
     if (_accessToken == null) {
       throw Exception('未连接 GitHub');
     }
@@ -192,11 +184,6 @@ class GistSyncService {
       'Accept': 'application/vnd.github+json',
       'Content-Type': 'application/json',
     };
-
-    // 如果提供了 ETag，则增加版本冲突检查
-    if (expectedEtag != null && expectedEtag.isNotEmpty) {
-      headers['If-Match'] = expectedEtag;
-    }
 
     final body = jsonEncode({
       'description': _gistDescription,
@@ -243,10 +230,6 @@ class GistSyncService {
         _logger.warning('Gist not found (404), clearing local ID');
         _gistId = null;
         throw Exception('云端数据丢失，将在下次同步时重新创建');
-      } else if (response.statusCode == 409) {
-        // 冲突 (通常是并发写导致)
-        _logger.warning('Gist conflict (409)');
-        throw Exception('同步冲突，请稍后重试');
       } else {
         _logger.severe('Failed to update Gist: ${response.body}');
         throw Exception('更新 Gist 失败: ${response.statusCode}');
@@ -255,8 +238,8 @@ class GistSyncService {
   }
 
   /// 下载 (Read)
-  /// 返回 Map: { 'content': String, 'etag': String }
-  Future<Map<String, String>?> downloadFromGist() async {
+  /// 返回加密后的内容字符串，若无则返回 null
+  Future<String?> downloadFromGist() async {
     if (_accessToken == null) {
       throw Exception('未连接 GitHub');
     }
@@ -288,16 +271,9 @@ class GistSyncService {
       final files = data['files'] as Map<String, dynamic>?;
       final syncFile = files?[_gistFileName] as Map<String, dynamic>?;
       final content = syncFile?['content'] as String?;
-      final etag = response.headers['etag'];
-
       if (content != null) {
-        _logger.info(
-          'Downloaded ${content.length} bytes from Gist, ETag: $etag',
-        );
-        return {
-          'content': content,
-          'etag': etag ?? _emptyEtag, // GitHub 几乎总会返回 ETag
-        };
+        _logger.info('Downloaded ${content.length} bytes from Gist');
+        return content;
       }
     } else if (response.statusCode == 404) {
       _logger.warning('Gist not found, resetting gistId');
