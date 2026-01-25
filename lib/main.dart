@@ -124,22 +124,28 @@ class _MyAppState extends ConsumerState<MyApp> {
   }
 
   Future<void> _checkDisclaimer() async {
-    final prefs = await SharedPreferences.getInstance();
+    // 1. 并行加载核心数据与连接 Gist
+    final results = await Future.wait([
+      SharedPreferences.getInstance(),
+      SyncManager().init(),
+    ]);
+
+    final prefs = results[0] as SharedPreferences;
     final agreed = prefs.getBool('disclaimer_agreed') ?? false;
 
-    // 初始化云同步管理器
+    // 2. 如果 Gist 已连接，异步触发同步，不阻塞 UI 渲染
     final syncManager = SyncManager();
-    await syncManager.init();
-
-    // 如果已连接，立即触发同步（跳过防抖，确保进入阅读器前数据已同步）
     if (syncManager.isConnected) {
-      syncManager.triggerSync(immediate: true);
+      // 在微任务中触发，确保 setState 立即执行
+      Future.microtask(() => syncManager.triggerSync(immediate: true));
     }
 
-    setState(() {
-      _agreed = agreed;
-      _loading = false;
-    });
+    if (mounted) {
+      setState(() {
+        _agreed = agreed;
+        _loading = false;
+      });
+    }
   }
 
   Future<void> _agree() async {

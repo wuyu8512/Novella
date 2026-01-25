@@ -60,7 +60,10 @@ class SignalRService {
   Completer<void>? _connectionCompleter;
   bool _isStarting = false;
 
-  // 内存会话令牌，3秒有效期
+  /// 令牌提供者委托，避免循环依赖
+  static Future<String> Function()? tokenProvider;
+
+  // 内存会话令牌，3秒有效期 (保留作为兜底)
   static final _TokenStorage _sessionToken = _TokenStorage(
     const Duration(seconds: 3),
   );
@@ -87,9 +90,13 @@ class SignalRService {
     }
   }
 
-  /// 获取有效会话令牌（内存存储/自动刷新）
-  /// 仿照参考实现的 TokenStorage 模式
+  /// 获取有效会话令牌
   Future<String> _getValidToken() async {
+    // 优先使用外部注入的提供者 (如 AuthService)
+    if (tokenProvider != null) {
+      return await tokenProvider!();
+    }
+
     // 优先检查内存令牌（3秒有效期）
     String token = _sessionToken.get();
     if (token.isNotEmpty) {
@@ -105,7 +112,7 @@ class SignalRService {
       return '';
     }
 
-    developer.log('Refreshing session token...', name: 'SIGNALR');
+    developer.log('Refreshing session token (legacy path)...', name: 'SIGNALR');
     try {
       final response = await _dio.post(
         '/api/user/refresh_token',
@@ -113,11 +120,9 @@ class SignalRService {
       );
 
       if (response.statusCode == 200 && response.data is Map) {
-        final newToken = response.data['Response'];
+        final newToken = response.data['Response'] ?? response.data['Token'];
         if (newToken != null && newToken is String && newToken.isNotEmpty) {
-          // 仅存储在内存中
           _sessionToken.set(newToken);
-          developer.log('Session token refreshed', name: 'SIGNALR');
           return newToken;
         }
       }

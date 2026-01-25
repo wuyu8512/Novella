@@ -22,8 +22,8 @@ class RequestQueue {
   RequestQueue._internal();
 
   // 速率限制配置
-  static const int _maxRequests = 5;
-  static const Duration _windowDuration = Duration(seconds: 5);
+  static const int _maxRequests = 10;
+  static const Duration _windowDuration = Duration(milliseconds: 5500);
 
   // 最近请求时间戳队列
   final Queue<DateTime> _requestTimestamps = Queue<DateTime>();
