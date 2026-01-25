@@ -260,7 +260,9 @@ class SyncManager with ChangeNotifier, WidgetsBindingObserver {
       final localData = await _collectLocalData();
 
       // 2. 下载远程
-      final remoteEncrypted = await _gistService.downloadFromGist();
+      final downloadResult = await _gistService.downloadFromGist();
+      final remoteEncrypted = downloadResult?['content'];
+      final etag = downloadResult?['etag'];
       SyncData? remoteData;
 
       // 解密 & 缓存 Key
@@ -325,7 +327,7 @@ class SyncManager with ChangeNotifier, WidgetsBindingObserver {
         _cachedKey!,
         _cachedSalt!,
       );
-      await _gistService.uploadToGist(encrypted);
+      await _gistService.uploadToGist(encrypted, expectedEtag: etag);
 
       // 5. 应用合并后的数据 (Update Local)
       // 关键修正：必须应用 mergedData，否则本地的新更改会被远程旧数据覆盖
@@ -413,7 +415,8 @@ class SyncManager with ChangeNotifier, WidgetsBindingObserver {
     _status = SyncStatus.syncing;
 
     try {
-      final remoteEncrypted = await _gistService.downloadFromGist();
+      final downloadResult = await _gistService.downloadFromGist();
+      final remoteEncrypted = downloadResult?['content'];
       if (remoteEncrypted == null) {
         _status = SyncStatus.idle;
         return false;
@@ -616,9 +619,12 @@ class SyncManager with ChangeNotifier, WidgetsBindingObserver {
             cover: data['cover'] as String?,
             chapterTitle: data['chapterTitle'] as String?,
             updatedAt: updatedAt, // 传递远程时间戳
+            skipIndexUpdate: true, // 同步过程中不更新“最后阅读”索引，防止中间乱序覆盖
           );
         }
       }
+      // 所有进度同步完成后，根据时间戳统一刷新一次“最后阅读”索引
+      await _progressService.refreshLastReadIndex();
     }
 
     // 应用 RefreshToken

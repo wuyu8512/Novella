@@ -106,6 +106,7 @@ class ReadingProgressService {
     String? chapterTitle, // 新增：章节标题
     DateTime? updatedAt, // 新增：支持指定时间戳 (用于同步)
     bool immediate = false, // 新增：是否立即同步
+    bool skipIndexUpdate = false, // 新增：是否跳过更新最后阅读索引 (用于同步批量写入)
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final key = 'read_pos_$bookId';
@@ -128,7 +129,9 @@ class ReadingProgressService {
 
     await prefs.setString(key, data);
     // 更新最后阅读书籍索引，用于极速定位
-    await prefs.setInt('last_read_book_id', bookId);
+    if (!skipIndexUpdate) {
+      await prefs.setInt('last_read_book_id', bookId);
+    }
 
     developer.log('SAVED: key=$key, data=$data', name: 'POSITION');
 
@@ -246,6 +249,44 @@ class ReadingProgressService {
     }
 
     return lastPos;
+  }
+
+  /// 刷新最后一次阅读的书籍索引
+  /// 遍历所有记录，根据时间戳找到真正最后阅读的书籍并更新索引
+  Future<void> refreshLastReadIndex() async {
+    final prefs = await SharedPreferences.getInstance();
+    final keys = prefs.getKeys().where((k) => k.startsWith('read_pos_'));
+
+    int? latestBookId;
+    DateTime? latestTime;
+
+    for (final key in keys) {
+      final data = prefs.getString(key);
+      if (data == null) continue;
+
+      try {
+        final parts = data.split('|');
+        if (parts.length >= 4) {
+          final updatedAt = DateTime.tryParse(parts[3]);
+          if (updatedAt != null) {
+            if (latestTime == null || updatedAt.isAfter(latestTime)) {
+              latestTime = updatedAt;
+              latestBookId = int.tryParse(key.replaceFirst('read_pos_', ''));
+            }
+          }
+        }
+      } catch (e) {
+        _logger.warning('Error parsing key $key during index refresh: $e');
+      }
+    }
+
+    if (latestBookId != null) {
+      await prefs.setInt('last_read_book_id', latestBookId);
+      developer.log(
+        'REFRESHED: last_read_book_id=$latestBookId (time=${latestTime?.toIso8601String()})',
+        name: 'POSITION',
+      );
+    }
   }
 
   /// 私有：本地保存 XPath 位置

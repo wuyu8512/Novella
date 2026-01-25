@@ -477,19 +477,34 @@ class _HomePageState extends ConsumerState<HomePage> with RouteAware {
             // 基于排序的动态模块（仅启用）
             ...settings.homeModuleOrder
                 .where((m) => settings.isModuleEnabled(m))
-                .expand((moduleId) {
+                .toList()
+                .asMap()
+                .entries
+                .expand((entry) {
+                  final index = entry.key;
+                  final moduleId = entry.value;
+                  final isFirst = index == 0;
+
                   switch (moduleId) {
                     case 'continueReading':
-                      return _buildContinueReadingSection(context);
+                      return _buildContinueReadingSection(
+                        context,
+                        isFirst: isFirst,
+                      );
                     case 'stats':
-                      return _buildStatsSection(context);
+                      return _buildStatsSection(context, isFirst: isFirst);
                     case 'recentlyUpdated':
-                      return _buildRecentlyUpdatedSection(context, settings);
+                      return _buildRecentlyUpdatedSection(
+                        context,
+                        settings,
+                        isFirst: isFirst,
+                      );
                     case 'ranking':
                       return _buildRankingSection(
                         context,
                         settings,
                         previewBooks,
+                        isFirst: isFirst,
                       );
                     default:
                       return <Widget>[];
@@ -520,7 +535,10 @@ class _HomePageState extends ConsumerState<HomePage> with RouteAware {
   }
 
   /// 构建继续阅读模块
-  List<Widget> _buildContinueReadingSection(BuildContext context) {
+  List<Widget> _buildContinueReadingSection(
+    BuildContext context, {
+    bool isFirst = false,
+  }) {
     if (_lastReadBookInfo == null || _lastReadPosition == null) return [];
 
     final colorScheme = Theme.of(context).colorScheme;
@@ -531,7 +549,12 @@ class _HomePageState extends ConsumerState<HomePage> with RouteAware {
     return [
       SliverToBoxAdapter(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: isFirst ? 16 : 0, // 置顶时增加间距以达视觉平衡
+            bottom: 0,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -637,11 +660,19 @@ class _HomePageState extends ConsumerState<HomePage> with RouteAware {
   }
 
   /// 构建统计卡片区域
-  List<Widget> _buildStatsSection(BuildContext context) {
+  List<Widget> _buildStatsSection(
+    BuildContext context, {
+    bool isFirst = false,
+  }) {
     return [
       SliverToBoxAdapter(
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.fromLTRB(
+            16,
+            isFirst ? 16 : 0, // 置顶时增加间距，非置顶保持紧凑
+            16,
+            16,
+          ),
           child: Row(
             children: [
               Expanded(
@@ -667,7 +698,11 @@ class _HomePageState extends ConsumerState<HomePage> with RouteAware {
   }
 
   /// 构建最近更新区域
-  List<Widget> _buildRecentlyUpdatedSection(BuildContext context, settings) {
+  List<Widget> _buildRecentlyUpdatedSection(
+    BuildContext context,
+    settings, {
+    bool isFirst = false,
+  }) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
@@ -675,7 +710,7 @@ class _HomePageState extends ConsumerState<HomePage> with RouteAware {
       // 区域标题
       SliverToBoxAdapter(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 8, 12),
+          padding: EdgeInsets.fromLTRB(16, isFirst ? 16 : 8, 8, 12),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -752,8 +787,9 @@ class _HomePageState extends ConsumerState<HomePage> with RouteAware {
   List<Widget> _buildRankingSection(
     BuildContext context,
     settings,
-    List<Book> previewBooks,
-  ) {
+    List<Book> previewBooks, {
+    bool isFirst = false,
+  }) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
@@ -761,7 +797,7 @@ class _HomePageState extends ConsumerState<HomePage> with RouteAware {
       // 区域标题
       SliverToBoxAdapter(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 8, 12),
+          padding: EdgeInsets.fromLTRB(16, isFirst ? 16 : 8, 8, 12),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -862,6 +898,7 @@ class _HomePageState extends ConsumerState<HomePage> with RouteAware {
 
     return Card(
       elevation: 0,
+      margin: EdgeInsets.zero, // 移除默认边距，确保宽度与继续阅读卡片对齐
       color: colorScheme.surfaceContainerHighest,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
