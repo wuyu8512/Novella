@@ -41,7 +41,6 @@ class ChapterService {
 
   /// 获取章节内容
   /// 参考 services/chapter/index.ts
-  /// Convert: 't2s' | 's2t' | null
   Future<ChapterContent> getNovelContent(
     int bid,
     int sortNum, {
@@ -68,12 +67,12 @@ class ChapterService {
         name: 'CHAPTER',
       );
       if (result['Chapter'] != null) {
-        final chapter = result['Chapter'];
+        final chapterJson = result['Chapter'];
         developer.log(
-          'Chapter keys: ${chapter.keys.toList()}',
+          'Chapter keys: ${chapterJson.keys.toList()}',
           name: 'CHAPTER',
         );
-        developer.log('Font value: ${chapter['Font']}', name: 'CHAPTER');
+        developer.log('Font value: ${chapterJson['Font']}', name: 'CHAPTER');
 
         // 提取阅读位置
         String? position;
@@ -86,12 +85,32 @@ class ChapterService {
           );
         }
 
-        return ChapterContent.fromJson(result['Chapter'], position: position);
+        // 处理内容，注入零宽空格以解决换行问题
+        String content = chapterJson['Content'] as String? ?? '';
+        if (content.isNotEmpty) {
+          content = _injectZeroWidthSpace(content);
+          // 更新 JSON 中的 Content
+          chapterJson['Content'] = content;
+        }
+
+        return ChapterContent.fromJson(chapterJson, position: position);
       }
       throw Exception('Chapter not found in response');
     } catch (e) {
       _logger.severe('Failed to get novel content: $e');
       rethrow;
     }
+  }
+
+  // 欺骗 Flutter 渲染引擎允许在任意位置断行
+  String _injectZeroWidthSpace(String htmlContent) {
+    return htmlContent.replaceAllMapped(RegExp(r'(>)([^<]+)(<)'), (match) {
+      final prefix = match.group(1)!; // >
+      final text = match.group(2)!; // Content
+      final suffix = match.group(3)!; // <
+      // 在所有非空白字符后插入 \u200B
+      final newText = text.split('').join('\u200B');
+      return '$prefix$newText$suffix';
+    });
   }
 }

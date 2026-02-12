@@ -27,9 +27,14 @@ enum _ReaderLayoutMode { standard, immersive, center }
 
 class _ReaderLayoutInfo {
   final _ReaderLayoutMode mode;
+  final bool startsWithImage;
   final bool endsWithImage;
 
-  const _ReaderLayoutInfo(this.mode, {this.endsWithImage = false});
+  const _ReaderLayoutInfo(
+    this.mode, {
+    this.startsWithImage = false,
+    this.endsWithImage = false,
+  });
 }
 
 class ReaderPage extends ConsumerStatefulWidget {
@@ -615,7 +620,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     );
 
     // AnimatedTheme 平滑过渡颜色
-    // AnimatedTheme 平滑过渡颜色
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle(
         statusBarColor: Colors.transparent, // 顶部状态栏透明（由 SoftEdgeBlur 接管视觉）
@@ -651,14 +655,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
     try {
       final doc = html_parser.parseFragment(content);
 
-      // 检查是否为单图模式：整章只有一张图片且无有效文字
-      final imgCount = doc.querySelectorAll('img').length;
-      final textContent = doc.text?.trim() ?? '';
-
-      if (imgCount == 1 && textContent.isEmpty) {
-        return const _ReaderLayoutInfo(_ReaderLayoutMode.center);
-      }
-
       // 获取有效子节点（忽略空白文本）
       final children =
           doc.nodes.where((n) {
@@ -667,47 +663,78 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             return false;
           }).toList();
 
+      final imgCount = doc.querySelectorAll('img').length;
+      final textContent = doc.text?.trim() ?? '';
+
+      // 定义判断是否以图片开头的辅助逻辑 (处理嵌套)
+      bool isImageAtTop(dom.Node? node) {
+        if (node == null) return false;
+        if (node is dom.Element) {
+          if (node.localName == 'img') return true;
+          // 检查第一个有意义的子节点
+          for (var child in node.nodes) {
+            if (child is dom.Text && child.text.trim().isEmpty) continue;
+            if (child is dom.Element) return isImageAtTop(child);
+            break;
+          }
+        }
+        return false;
+      }
+
+      // 如果全篇只有一张图且无文本，满足居中条件
+      if (imgCount == 1 && textContent.isEmpty) {
+        return const _ReaderLayoutInfo(_ReaderLayoutMode.center);
+      }
+
+      bool startsWithImage = false;
+      if (children.isNotEmpty) {
+        // 尝试从前三个节点中找图，如果在这之前没有显著文本信息，就算 startsWithImage
+        for (int i = 0; i < children.length && i < 3; i++) {
+          final node = children[i];
+          if (isImageAtTop(node)) {
+            startsWithImage = true;
+            break;
+          }
+          // 如果遇到了显著的文本（即便是 H1, P 等包裹），则认为不是以图片开头
+          if (node.text?.trim().isNotEmpty == true) break;
+        }
+      }
+
       bool endsWithImage = false;
       if (children.isNotEmpty) {
         final lastNode = children.last;
         if (lastNode is dom.Element) {
           if (lastNode.localName == 'img') {
             endsWithImage = true;
-          } else if ({'p', 'div'}.contains(lastNode.localName) &&
-              lastNode.children.length == 1 &&
-              lastNode.children.first.localName == 'img') {
-            endsWithImage = true;
+          } else if (lastNode.querySelectorAll('img').isNotEmpty) {
+            // 如果最后一个元素包含图片且没有后续文字，也算 endsWithImage
+            final lastMeaningful = lastNode.nodes.lastWhere(
+              (n) => !(n is dom.Text && n.text.trim().isEmpty),
+              orElse: () => lastNode,
+            );
+            if (lastMeaningful is dom.Element &&
+                lastMeaningful.localName == 'img') {
+              endsWithImage = true;
+            }
           }
         }
       }
 
       // 检查沉浸式置顶模式
-      // 条件：开头是图片，且紧接着是图片（连续>=2张），且全篇图片总数超过2张
       if (children.isNotEmpty) {
         int consecutiveImages = 0;
         for (final node in children) {
-          bool isImg = false;
-          if (node is dom.Element) {
-            if (node.localName == 'img') {
-              isImg = true;
-            } else if ({'p', 'div'}.contains(node.localName) &&
-                node.children.length == 1 &&
-                node.children.first.localName == 'img') {
-              // 处理 <p><img></p> 的情况
-              isImg = true;
-            }
-          }
-          if (isImg) {
+          if (isImageAtTop(node)) {
             consecutiveImages++;
           } else {
             break;
           }
         }
 
-        // 满足条件：开头连续图片>=2 且 总图片数>2
         if (consecutiveImages >= 2 && imgCount > 2) {
           return _ReaderLayoutInfo(
             _ReaderLayoutMode.immersive,
+            startsWithImage: true,
             endsWithImage: endsWithImage,
           );
         }
@@ -715,6 +742,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
 
       return _ReaderLayoutInfo(
         _ReaderLayoutMode.standard,
+        startsWithImage: startsWithImage,
         endsWithImage: endsWithImage,
       );
     } catch (e) {
@@ -736,79 +764,199 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             ? _analyzeLayout(_chapter!.content)
             : const _ReaderLayoutInfo(_ReaderLayoutMode.standard);
 
-    // HtmlWidget 配置
-    final htmlWidget = HtmlWidget(
-      _chapter!.content,
-      textStyle: TextStyle(
-        fontFamily: _fontFamily,
-        fontSize: settings.fontSize,
-        height: 1.6,
-        color: readerTextColor, // 应用阅读文字色
-      ),
-      // 自定义样式：实现文字带边距，图片满宽
-      customStylesBuilder: (element) {
-        // 图片：强制满宽，无边距，消除底部空隙
-        if (element.localName == 'img') {
+    // 基础 padding 计算
+    final EdgeInsets padding =
+        layoutInfo.mode == _ReaderLayoutMode.center
+            ? EdgeInsets.zero
+            : EdgeInsets.fromLTRB(
+              0,
+              (layoutInfo.mode == _ReaderLayoutMode.immersive ||
+                      layoutInfo.startsWithImage)
+                  ? 0
+                  : topPadding + 20,
+              0,
+              layoutInfo.endsWithImage ? 0 : 80.0 + bottomPadding,
+            );
+
+    // 自定义样式构建器
+    // 自定义样式构建器
+    final customStylesBuilder = (dom.Element element) {
+      // 1. 处理浮动类名 (Common in Web novels)
+      if (element.classes.contains('fr')) {
+        return {'float': 'right', 'margin-left': '0.5em', 'padding': '0'};
+      }
+      if (element.classes.contains('fl')) {
+        return {'float': 'left', 'margin-right': '0.5em', 'padding': '0'};
+      }
+
+      // 2. 图片本身样式
+      if (element.localName == 'img') {
+        // 检查自身或父级是否有浮动属性
+        final parent = element.parent;
+        // 如果图片自身有浮动属性，或者父级有 fr/fl 类，则不进行全宽处理
+        if (element.attributes['align']?.isNotEmpty == true ||
+            element.attributes['style']?.contains('float') == true ||
+            element.classes.contains('fr') ||
+            element.classes.contains('fl') ||
+            (parent != null &&
+                (parent.classes.contains('fr') ||
+                    parent.classes.contains('fl')))) {
+          return null;
+        }
+
+        // 普通插图：强制满宽
+        return {
+          'width': '100%',
+          'height': 'auto',
+          'margin': '0',
+          'padding': '0',
+          'display': 'block',
+        };
+      }
+
+      // 3. 容器样式 (p, div, h1-h6, center 等)
+      final textTags = {
+        'p',
+        'div',
+        'h1',
+        'h2',
+        'h3',
+        'h4',
+        'h5',
+        'h6',
+        'center',
+      };
+      if (textTags.contains(element.localName)) {
+        // 如果包含图片，则认为是插图容器，取消默认 padding
+        if (element.getElementsByTagName('img').isNotEmpty) {
           return {
-            'width': '100%',
-            'height': 'auto',
             'margin': '0',
             'padding': '0',
-            'display': 'block',
-            // 关键：消除图片底部的行高空隙
-            'vertical-align': 'bottom',
+            'line-height': '0',
+            'text-align': 'center', // 图片居中
           };
         }
 
-        // 文本容器及其它块级元素
-        if ({
-          'p',
-          'div',
-          'section',
-          'article',
-          'blockquote',
-          'h1',
-          'h2',
-          'h3',
-          'h4',
-          'h5',
-          'h6',
-          'li',
-        }.contains(element.localName)) {
-          final hasImage = element.getElementsByTagName('img').isNotEmpty;
+        // 纯文本容器：添加两侧 padding
+        final style = {
+          'padding-left': '16px',
+          'padding-right': '16px',
+          'margin-bottom': '1em',
+          'text-align': 'left', // 强制左对齐
+        };
 
-          if (hasImage) {
-            // 有图片：无边距，无行高，满宽
-            return {
-              'margin': '0', // 确保无外边距，图片贴边
-              'padding': '0',
-              'line-height': '0',
-              'text-align': 'center',
-            };
-          } else {
-            // 纯文本：加水平边距
-            final styles = <String, String>{
-              'padding-left': '16px',
-              'padding-right': '16px',
-              'margin-bottom': '1em',
-            };
+        // 处理特殊类名
+        if (element.classes.contains('center')) {
+          // 如果本身带 center 类，我们依然维持逻辑，但给予边距
+        }
 
-            return styles;
+        return style;
+      }
+
+      if (element.localName == 'body') {
+        return {'margin': '0', 'padding': '0', 'line-height': '1.6'};
+      }
+      return null;
+    };
+
+    // 通用 Widget 构建器 (图片缓存)
+    final customWidgetBuilder = (dom.Element element) {
+      if (element.localName == 'img') {
+        final src = element.attributes['src'];
+        if (src != null && src.isNotEmpty) {
+          // 检查是否在浮动容器中 (向上查找 3 层)
+          bool isFloating = false;
+          bool isFloatRight = false;
+          dom.Element? current = element;
+          for (int i = 0; i < 3; i++) {
+            if (current == null) break;
+
+            final style = current.attributes['style'] ?? '';
+            final align = current.attributes['align'] ?? '';
+            final classes = current.classes;
+
+            if (style.contains('float: right') ||
+                align == 'right' ||
+                classes.contains('fr')) {
+              isFloating = true;
+              isFloatRight = true;
+              break;
+            }
+
+            if (style.contains('float: left') ||
+                align == 'left' ||
+                classes.contains('fl')) {
+              isFloating = true;
+              isFloatRight = false;
+              break;
+            }
+            current = current.parent;
           }
-        }
 
-        // 兜底
-        if (element.localName == 'body') {
-          return {'margin': '0', 'padding': '0', 'line-height': '1.6'};
+          final imageWidget = CachedNetworkImage(
+            imageUrl: src,
+            placeholder:
+                (context, url) => Container(
+                  height: 200,
+                  color: readerTextColor.withValues(alpha: 0.05),
+                  child: const Center(
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+            errorWidget:
+                (context, url, error) => Container(
+                  height: 120,
+                  color: readerTextColor.withValues(alpha: 0.05),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.broken_image,
+                        color: readerTextColor.withValues(alpha: 0.3),
+                        size: 40,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '加载失败',
+                        style: TextStyle(
+                          color: readerTextColor.withValues(alpha: 0.5),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            fit: BoxFit.contain,
+            // 如果是浮动元素，强制限制宽度 (避免过大)
+            width: isFloating ? null : double.infinity,
+          );
+
+          if (isFloating) {
+            // 针对浮动图片的专门处理：
+            // 1. 强制对齐 (Align)
+            // 2. 限制最大宽度 (ConstrainedBox)，防止原图过大撑满屏幕
+            return Align(
+              alignment:
+                  isFloatRight ? Alignment.centerRight : Alignment.centerLeft,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxWidth: 160, // 限制最大宽度，不管是头像还是角标，160dp 足够了
+                ),
+                child: imageWidget,
+              ),
+            );
+          }
+
+          return imageWidget;
         }
-        return null;
-      },
-    );
+      }
+      return null;
+    };
 
     Widget content;
 
     if (layoutInfo.mode == _ReaderLayoutMode.center) {
-      // 居中模式：使用 LayoutBuilder + Constraints 确保内容垂直居中
+      // 居中模式：内容短，使用默认 Column 模式 + SingleChildScrollView
       content = LayoutBuilder(
         builder: (context, constraints) {
           return SingleChildScrollView(
@@ -816,25 +964,45 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
             padding: EdgeInsets.zero,
             child: ConstrainedBox(
               constraints: BoxConstraints(minHeight: constraints.maxHeight),
-              child: Center(child: htmlWidget),
+              child: Center(
+                child: HtmlWidget(
+                  _chapter!.content,
+                  textStyle: TextStyle(
+                    fontFamily: _fontFamily,
+                    fontSize: settings.fontSize,
+                    height: 1.6,
+                    color: readerTextColor,
+                  ),
+                  customStylesBuilder: customStylesBuilder,
+                  customWidgetBuilder: customWidgetBuilder,
+                  // 默认 renderMode: RenderMode.column
+                ),
+              ),
             ),
           );
         },
       );
     } else {
-      // 标准模式 / 沉浸模式
-      // 沉浸模式 padding=0，标准模式 padding=状态栏+20
-      final double paddingTop =
-          layoutInfo.mode == _ReaderLayoutMode.immersive ? 0 : topPadding + 20;
-
-      // 底部留白逻辑：如果以图片结尾，且开启了endsWithImage，则底部留白为0
-      final double paddingBottom =
-          layoutInfo.endsWithImage ? 0 : 80.0 + bottomPadding;
-
-      content = SingleChildScrollView(
+      // 标准/沉浸模式：使用 CustomScrollView + SliverList 模式 (懒加载)
+      content = CustomScrollView(
         controller: _scrollController,
-        padding: EdgeInsets.fromLTRB(0, paddingTop, 0, paddingBottom),
-        child: htmlWidget,
+        slivers: [
+          SliverPadding(
+            padding: padding,
+            sliver: HtmlWidget(
+              _chapter!.content,
+              renderMode: RenderMode.sliverList,
+              textStyle: TextStyle(
+                fontFamily: _fontFamily,
+                fontSize: settings.fontSize,
+                height: 1.6,
+                color: readerTextColor,
+              ),
+              customStylesBuilder: customStylesBuilder,
+              customWidgetBuilder: customWidgetBuilder,
+            ),
+          ),
+        ],
       );
     }
 
@@ -843,8 +1011,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage>
       color: readerBackgroundColor, // 应用阅读背景色
       child: NotificationListener<ScrollEndNotification>(
         onNotification: (notification) {
-          // 滑动停止时强制刷新进度，确保百分比是最新的
-          // 即使菜单不收起，也要能看到最新的 "已读 x%"
           if (mounted) setState(() {});
           return false;
         },
