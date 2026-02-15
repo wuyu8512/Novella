@@ -170,6 +170,10 @@ class _HomePageState extends ConsumerState<HomePage> with RouteAware {
     try {
       if (internalLoading) setState(() => _loading = true);
 
+      // 预热本地封面目录：确保后续 [`LocalShelfCover`](lib/features/home/home_page.dart:1068)
+      // 在首次渲染“继续阅读”时就能同步命中本地文件，避免先显示网络封面再切换造成闪烁。
+      await LocalCoverService().prewarm();
+
       final lastPos = await _progressService.getLastReadBook();
       if (lastPos != null) {
         // 1. 优先尝试使用 ReadPosition 自带的本地持久化元数据实现瞬产渲染
@@ -239,6 +243,20 @@ class _HomePageState extends ConsumerState<HomePage> with RouteAware {
     }
   }
 
+  /// 将封面 URL 规范化为“图片身份”用于比较。
+  ///
+  /// - 忽略 query / fragment（常见于 token、版本号等，会导致同图不同 URL）
+  /// - 解析失败则回退到原始字符串
+  String _canonicalCoverUrl(String? url) {
+    if (url == null || url.isEmpty) return '';
+    try {
+      final uri = Uri.parse(url);
+      return uri.replace(query: '', fragment: '').toString();
+    } catch (_) {
+      return url;
+    }
+  }
+
   void _updateContinueReadingState(ReadPosition pos, BookInfo info) {
     // 补全逻辑：如果本地记录缺失章节标题，尝试从最新的网络详情中补全
     ReadPosition effectivePos = pos;
@@ -269,18 +287,31 @@ class _HomePageState extends ConsumerState<HomePage> with RouteAware {
     }
 
     // 性能优化：如果数据未变（含章节名），则不触发更新，防止图片重载闪烁
+    final currentCover = _lastReadBookInfo?.cover;
+    final nextCoverRaw =
+        (pos.cover?.isNotEmpty == true) ? pos.cover! : info.cover;
+    final currentCoverKey = _canonicalCoverUrl(currentCover);
+    final nextCoverKey = _canonicalCoverUrl(nextCoverRaw);
+
+    // 关键：用 canonical 进行“同图判等”，避免仅 query/token 变化导致 setState -> ImageProvider 变化 -> 闪烁。
     if (_lastReadBookInfo?.id == info.id &&
-        _lastReadBookInfo?.cover == info.cover &&
+        currentCoverKey == nextCoverKey &&
         _lastReadPosition?.chapterId == effectivePos.chapterId &&
         _lastReadPosition?.chapterTitle == effectivePos.chapterTitle) {
       return;
     }
 
+    // 如果“同图不同 URL”，则保持 cover 字符串稳定，避免 ImageProvider 重建导致闪一下。
+    final stableCover =
+        (currentCover?.isNotEmpty == true && currentCoverKey == nextCoverKey)
+            ? currentCover!
+            : nextCoverRaw;
+
     // 构建 Book 对象用于 UI 显示
     final book = Book(
       id: info.id,
       title: info.title,
-      cover: info.cover,
+      cover: stableCover,
       author: info.author,
       lastUpdatedAt: info.lastUpdatedAt,
       category: null,
@@ -593,6 +624,22 @@ class _HomePageState extends ConsumerState<HomePage> with RouteAware {
                         // 封面
                         Hero(
                           tag: 'continue_reading_${book.id}',
+                          // 冷启动首次点击时，详情页封面可能仍在占位阶段。
+                          // 这里 push 阶段强制使用来源 Hero（首页侧）作为飞行物，
+                          // 避免 Hero 飞行过程中从“真实封面”变成“灰色占位”造成观感退化。
+                          flightShuttleBuilder: (
+                            _,
+                            __,
+                            direction,
+                            fromHeroContext,
+                            toHeroContext,
+                          ) {
+                            final fromHero = fromHeroContext.widget as Hero;
+                            final toHero = toHeroContext.widget as Hero;
+                            return direction == HeroFlightDirection.push
+                                ? fromHero.child
+                                : toHero.child;
+                          },
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(8),
                             child: LocalShelfCover(
@@ -1079,6 +1126,13 @@ class LocalShelfCover extends StatelessWidget {
     required this.height,
   });
 
+  static String _canonicalCoverUrl(String url) {
+    if (url.isEmpty) return '';
+    final uri = Uri.tryParse(url);
+    if (uri == null) return url;
+    return uri.replace(query: '', fragment: '').toString();
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -1098,9 +1152,14 @@ class LocalShelfCover extends StatelessWidget {
     // 回退到网络缓存
     return CachedNetworkImage(
       imageUrl: coverUrl,
+      // 同图不同 URL 时尽量复用同一缓存条目，避免因为 query/token 变化重拉/重淡入。
+      cacheKey: coverUrl.isEmpty ? null : _canonicalCoverUrl(coverUrl),
       width: width,
       height: height,
       fit: BoxFit.cover,
+      useOldImageOnUrlChange: true,
+      fadeInDuration: Duration.zero,
+      fadeOutDuration: Duration.zero,
       placeholder:
           (context, url) => Container(color: colorScheme.surfaceContainerHigh),
       errorWidget:

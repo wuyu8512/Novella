@@ -26,6 +26,14 @@ class LocalCoverService {
     }
   }
 
+  /// 预热本地封面目录（不下载任何封面）。
+  ///
+  /// 目的：让 [`getLocalCoverPathSync()`](lib/data/services/local_cover_service.dart:62) 在 UI 首次 build 前就能返回路径，
+  /// 避免首页“继续阅读”封面在网络图与本地图之间切换导致的闪烁。
+  Future<void> prewarm() async {
+    await _init();
+  }
+
   /// 获取本地封面文件
   Future<File?> getLocalCover(int bid) async {
     await _init();
