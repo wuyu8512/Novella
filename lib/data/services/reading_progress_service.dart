@@ -13,6 +13,7 @@ class ReadPosition {
   final String? title; // 书籍标题
   final String? cover; // 封面 URL
   final String? chapterTitle; // 新增：章节标题
+  final DateTime? updatedAt; // 新增：本地记录更新时间（用于乐观刷新/同步裁决）
 
   ReadPosition({
     required this.bookId,
@@ -22,6 +23,7 @@ class ReadPosition {
     this.title,
     this.cover,
     this.chapterTitle,
+    this.updatedAt,
   });
 
   Map<String, dynamic> toJson() => {
@@ -32,6 +34,7 @@ class ReadPosition {
     'title': title,
     'cover': cover,
     'chapterTitle': chapterTitle,
+    'updatedAt': updatedAt?.toIso8601String(),
   };
 
   factory ReadPosition.fromJson(Map<String, dynamic> json) {
@@ -43,6 +46,7 @@ class ReadPosition {
       title: json['title'] as String?,
       cover: json['cover'] as String?,
       chapterTitle: json['chapterTitle'] as String?,
+      updatedAt: DateTime.tryParse(json['updatedAt'] as String? ?? ''),
     );
   }
 }
@@ -121,6 +125,7 @@ class ReadingProgressService {
       title: title,
       cover: cover,
       chapterTitle: chapterTitle,
+      updatedAt: timestamp,
     );
 
     // 格式: chapterId|sortNum|scrollPosition|updatedAt|title|cover|chapterTitle
@@ -216,6 +221,7 @@ class ReadingProgressService {
           chapterId: int.parse(parts[0]),
           sortNum: int.parse(parts[1]),
           scrollPosition: double.parse(parts[2]),
+          updatedAt: parts.length >= 4 ? DateTime.tryParse(parts[3]) : null,
           title:
               parts.length >= 5 ? (parts[4].isEmpty ? null : parts[4]) : null,
           cover:
@@ -273,6 +279,7 @@ class ReadingProgressService {
                 chapterId: int.parse(parts[0]),
                 sortNum: int.parse(parts[1]),
                 scrollPosition: double.parse(parts[2]),
+                updatedAt: updatedAt,
                 title:
                     parts.length >= 5
                         ? (parts[4].isEmpty ? null : parts[4])

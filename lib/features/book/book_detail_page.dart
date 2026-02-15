@@ -267,6 +267,9 @@ class BookDetailPageState extends ConsumerState<BookDetailPage> {
   bool _coverLoadFailed = false;
   bool _colorsExtracted = false; // Track if we already extracted colors
 
+  // 从阅读器返回后的短暂窗口：优先展示本地刚更新的进度，避免服务端进度延迟导致按钮不更新或回退
+  DateTime? _suppressServerPositionUntil;
+
   // 基于封面的动态配色方案
   ColorScheme? _dynamicColorScheme;
 
@@ -801,7 +804,14 @@ class BookDetailPageState extends ConsumerState<BookDetailPage> {
             _bookInfo = info;
           }
           if (positionChanged) {
-            _readPosition = effectivePosition;
+            final suppressUntil = _suppressServerPositionUntil;
+            final suppress =
+                suppressUntil != null && DateTime.now().isBefore(suppressUntil);
+
+            // 刚从阅读器返回时优先保持本地进度，避免服务端进度延迟导致按钮不更新或回退。
+            if (!suppress) {
+              _readPosition = effectivePosition;
+            }
           }
         });
       }
@@ -838,11 +848,41 @@ class BookDetailPageState extends ConsumerState<BookDetailPage> {
           ),
         )
         .then((_) {
-          // 从阅读器返回时仅刷新进度
-          if (mounted) {
-            _refreshReadingProgress();
-          }
+          if (!mounted) return;
+
+          // 1) 先用本地进度即时刷新按钮（同设备刚读完的反馈）
+          // 2) 短暂抑制服务端章节号覆盖，避免服务端进度延迟造成“按钮不更新/又回退”
+          _suppressServerPositionUntil =
+              DateTime.now().add(const Duration(seconds: 8));
+
+          _refreshReadingProgressPreferLocal();
+
+          // 静默拉取一次最新服务端数据（用于更新详情信息/服务端章节号）
+          // ignore: unawaited_futures
+          Future.microtask(() => _fetchServerDataInBackground());
         });
+  }
+
+  /// 从阅读器返回时优先采用本地进度（即时更新 UI）
+  /// 注：章节号权威源仍然是服务端；这里只用于同设备的“立刻更新按钮”。
+  Future<void> _refreshReadingProgressPreferLocal() async {
+    try {
+      final localPosition = await _progressService.getLocalScrollPosition(
+        widget.bookId,
+      );
+      final mark = await _bookMarkService.getBookMark(widget.bookId);
+      await _userService.ensureInitialized();
+
+      if (mounted) {
+        setState(() {
+          _readPosition = localPosition;
+          _isInShelf = _userService.isInShelf(widget.bookId);
+          _currentMark = mark;
+        });
+      }
+    } catch (e) {
+      _logger.warning('Failed to refresh local reading progress: $e');
+    }
   }
 
   void _continueReading() {
