@@ -21,6 +21,30 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 // 全局导航观察者，用于页面返回时触发刷新
 final RouteObserver<PageRoute> routeObserver = RouteObserver<PageRoute>();
 
+/// System UI 调试与签名去重（仅在 debug 下输出）
+class _SystemUiDebug {
+  static String? _lastSig;
+
+  static void logOverlayStyle(
+    SystemUiOverlayStyle style, {
+    required String source,
+  }) {
+    final sig = <String>[
+      'src=$source',
+      'statusColor=${style.statusBarColor}',
+      'statusIcon=${style.statusBarIconBrightness}',
+      'navColor=${style.systemNavigationBarColor}',
+      'navDivider=${style.systemNavigationBarDividerColor}',
+      'navIcon=${style.systemNavigationBarIconBrightness}',
+      'navContrast=${style.systemNavigationBarContrastEnforced}',
+    ].join(';');
+
+    if (sig == _lastSig) return;
+    _lastSig = sig;
+    developer.log(sig, name: 'SYSTEM_UI');
+  }
+}
+
 // === 加载 Native 库 ===
 // iOS/macOS: 静态链接 (process)
 // Windows/Android: 动态库 (open)
@@ -51,6 +75,19 @@ void main() async {
       systemNavigationBarContrastEnforced: false,
     ),
   );
+
+  assert(() {
+    _SystemUiDebug.logOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarDividerColor: Colors.transparent,
+        systemNavigationBarContrastEnforced: false,
+      ),
+      source: 'main()',
+    );
+    return true;
+  }());
 
   // 初始化日志缓冲服务（尽早启动以捕获所有日志）
   LogBufferService.init();
@@ -285,6 +322,37 @@ class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
 
         return MaterialApp(
           title: 'Novella',
+          // 全局兜底：确保无 AppBar/无 AnnotatedRegion 的页面也能持续下发透明导航栏样式。
+          // 解决“二次启动自动登录 loading -> 主页首次不沉浸；进详情页后恢复并沿用”的样式被覆盖问题。
+          builder: (context, child) {
+            final brightness = Theme.of(context).brightness;
+            final systemIconsBrightness =
+                brightness == Brightness.dark
+                    ? Brightness.light
+                    : Brightness.dark;
+
+            final style = SystemUiOverlayStyle(
+              statusBarColor: Colors.transparent,
+              statusBarIconBrightness: systemIconsBrightness,
+              // iOS 会用到；Android 可忽略，但设置不会有副作用。
+              statusBarBrightness: brightness,
+
+              systemNavigationBarColor: Colors.transparent,
+              systemNavigationBarDividerColor: Colors.transparent,
+              systemNavigationBarIconBrightness: systemIconsBrightness,
+              systemNavigationBarContrastEnforced: false,
+            );
+
+            assert(() {
+              _SystemUiDebug.logOverlayStyle(style, source: 'MaterialApp.builder');
+              return true;
+            }());
+
+            return AnnotatedRegion<SystemUiOverlayStyle>(
+              value: style,
+              child: child ?? const SizedBox.shrink(),
+            );
+          },
           // 本地化配置（含简体/繁体中文支持）
           localizationsDelegates: const [
             GlobalMaterialLocalizations.delegate,
